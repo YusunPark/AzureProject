@@ -1,46 +1,51 @@
-# 🤖 AI 문서 작성 어시스턴트
+# 🤖 AI 문서 작성 어시스턴트 (리팩토링 버전)
 
-Streamlit과 OnlyOffice를 활용한 지능형 문서 작성 지원 시스템
+Azure OpenAI와 Streamlit을 활용한 지능형 문서 작성 지원 시스템
 
 ## ✨ 주요 기능
 
-### 📝 OnlyOffice 통합
-- Word, PowerPoint 문서 편집 지원
-- 실시간 협업 기능
-- 다양한 파일 형식 지원 (.docx, .pptx, .pdf, .txt)
-
-### 🤖 AI 기능
-- **텍스트 분석**: 선택된 텍스트의 키워드, 주제, 맥락 분석
-- **문서 추천**: 관련 문서 및 참조 자료 추천
-- **문장 다듬기**: 명확성, 전문성, 간결성 개선
+### 🤖 핵심 AI 기능
+- **3단계 통합 분석**: 프롬프트 최적화 → 사내/외부 검색 → 종합 분석
+- **사내 문서 검색**: Azure AI Search를 통한 기업 내부 자료 검색
+- **외부 레퍼런스 검색**: Tavily API를 통한 실시간 웹 검색
+- **텍스트 다듬기**: 명확성, 전문성, 간결성 개선
 - **내용 구조화**: 목차, 단계별 가이드, Q&A 형식으로 변환
 
-### 🔍 검색 기능
-- **전체 문서 기반 검색**: 문서 전체 내용을 바탕으로 AI 추천
-- **선택된 텍스트 기반 검색**: 특정 텍스트 선택 후 맞춤 추천
-- **Tavily 검색 엔진**: 실시간 웹 검색을 통한 최신 정보 제공
+### � 문서 편집 기능
+- **다중 문서 타입**: 새 문서, 템플릿, 파일 불러오기
+- **실시간 통계**: 단어 수, 문자 수, 줄 수 표시
+- **편집기 커스터마이징**: 높이 조절, 폰트 크기 변경
+- **내보내기**: TXT 형식으로 다운로드
 
 ### 🎨 사용자 경험
-- **단계별 분석 과정 시각화**: AI 작업 진행 상황 실시간 표시
-- **토글형 결과 표시**: 핵심 내용 빠른 확인, 세부사항 펼쳐보기
-- **원클릭 삽입**: 추천 내용을 문서에 바로 삽입
-- **하이라이트 효과**: 삽입된 내용 3초간 노란색 강조
+- **모듈형 UI**: 문서 생성 → 편집 → AI 분석 단계별 인터페이스
+- **토글형 AI 패널**: 필요시에만 표시되는 AI 도구
+- **진행 상황 표시**: AI 분석 과정의 실시간 피드백
+- **원클릭 삽입**: 분석 결과를 문서에 바로 적용
 
-## 🏗️ 시스템 구조
+## 🏗️ 리팩토링된 시스템 구조
 
 ```
 AzureProject/
-├── app.py                    # 메인 Streamlit 애플리케이션
-├── config.py                 # 설정 관리
-├── requirements.txt          # Python 의존성
-├── .env                      # 환경 변수 (API 키 등)
-├── run.sh                    # 실행 스크립트
-├── utils/
-│   ├── ai_service.py         # Azure OpenAI 연동 AI 서비스
-│   └── document_service.py   # OnlyOffice 연동 문서 서비스
-└── data/
-    ├── sample_documents.json # 샘플 문서 데이터
-    └── keywords.json         # 키워드 및 카테고리 정보
+├── app_refactored.py        # 새로운 메인 앱 (간소화)
+├── app.py                   # 기존 메인 앱 (백업용)
+├── config.py                # 정리된 설정 관리
+├── state/                   # 상태 관리
+│   └── session_state.py     # Streamlit 세션 상태 중앙 관리
+├── ui/                      # UI 컴포넌트
+│   ├── styles.py            # CSS 스타일 정의
+│   ├── document_creation.py # 문서 생성 UI
+│   ├── document_editor.py   # 문서 편집 UI
+│   └── ai_sidebar.py        # AI 도구 사이드바
+├── services/                # 비즈니스 로직
+│   └── ai_analysis_service.py # AI 분석 프로세스 관리
+├── utils/                   # 유틸리티
+│   ├── ai_service.py        # 간소화된 AI 서비스
+│   └── ai_service_backup.py # 기존 AI 서비스 (백업)
+├── backup_old_files/        # 사용하지 않는 파일들
+└── data/                    # 데이터 파일들
+    ├── sample_documents.json
+    └── keywords.json
 ```
 
 ## 🚀 설치 및 실행

@@ -13,9 +13,9 @@ pip install -r requirements.txt
 export STREAMLIT_THEME_BASE="light"
 export STREAMLIT_THEME_PRIMARY_COLOR="#8b5cf6"
 
-# Streamlit 앱 실행
-echo "🌐 Streamlit 서버 시작..."
-streamlit run app.py --server.port=8501 --server.address=0.0.0.0
+# Streamlit 앱 실행 (리팩토링된 버전)
+echo "🌐 Streamlit 서버 시작 (리팩토링 버전)..."
+streamlit run app_refactored.py --server.port=8501 --server.address=0.0.0.0
 
 echo "✅ 애플리케이션이 실행되었습니다!"
 echo "🔗 브라우저에서 http://localhost:8501 접속"

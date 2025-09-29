@@ -1,15 +1,8 @@
 """
-설정 파일
+설정 파일 - 애플리케이션 전체 설정 관리
 """
 import os
 from dotenv import load_dotenv
-AZURE_SEARCH_CONFIG = {
-    "endpoint": os.getenv("AZURE_SEARCH_ENDPOINT"),
-    "admin_key": os.getenv("AZURE_SEARCH_ADMIN_KEY"),
-    "api_key": os.getenv("AZURE_SEARCH_API_KEY"),
-    "index_name": os.getenv("AZURE_SEARCH_INDEX_NAME", "doc-index"),
-    "api_version": "2019-05-06"
-}
 
 # Azure App Service 환경 감지
 IS_AZURE_APP_SERVICE = os.getenv('WEBSITE_SITE_NAME') is not None
@@ -17,22 +10,9 @@ IS_AZURE_APP_SERVICE = os.getenv('WEBSITE_SITE_NAME') is not None
 # 환경에 따라 .env 파일 로드
 if IS_AZURE_APP_SERVICE:
     print("🔵 Azure App Service 환경에서 실행 중")
-    # Azure에서는 환경 변수를 직접 사용
 else:
     print("🟢 로컬 환경에서 실행 중")
-    # 로컬에서는 .env 파일 로드
     load_dotenv()
-
-# OnlyOffice DocSpace 설정
-ONLYOFFICE_CONFIG = {
-    "docspace_url": os.getenv("ONLYOFFICE_DOCSPACE_URL", "https://docspace-i0p5og.onlyoffice.com"),
-    "sdk_url": os.getenv("ONLYOFFICE_SDK_URL", "https://docspace-i0p5og.onlyoffice.com/static/scripts/sdk/2.0.0/api.js"),
-    "api_key": os.getenv("ONLYOFFICE_API_KEY"),
-    "jwt_secret": os.getenv("ONLYOFFICE_JWT_SECRET", "your_jwt_secret_key"),
-    "jwt_header": "Authorization",
-    "mode": "editor",
-    "frame_id": "ds-frame"
-}
 
 # AI 모델 설정 (Azure OpenAI)
 AI_CONFIG = {
@@ -68,18 +48,14 @@ LANGSMITH_CONFIG = {
     "enabled": bool(os.getenv("LANGSMITH_API_KEY"))
 }
 
-# 데이터베이스 설정
-DATABASE_CONFIG = {
-    "host": "localhost",
-    "port": 5432,
-    "database": "document_assistant",
-    "user": "your_username",
-    "password": "your_password"
-}
-
 # 앱 설정
 APP_CONFIG = {
+    "page_title": "AI 문서 작성 어시스턴트",
+    "page_icon": "📝",
+    "layout": "wide",
     "max_upload_size": 10 * 1024 * 1024,  # 10MB
-    "supported_formats": [".docx", ".pptx", ".pdf", ".txt"],
-    "cache_duration": 3600  # 1시간
+    "supported_formats": [".docx", ".pptx", ".pdf", ".txt", ".md"],
+    "cache_duration": 300,  # 5분
+    "editor_heights": [300, 400, 500, 600, 700, 800],
+    "font_sizes": [12, 14, 16, 18, 20]
 }
