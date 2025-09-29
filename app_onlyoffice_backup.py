@@ -1,4 +1,4 @@
-# app_text_editor.py
+# app.py
 import streamlit as st
 import time
 import json
@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # 필요한 서비스들 import
+from utils.document_service import DocumentService
 from utils.ai_service import AIService
 
 # 페이지 설정
@@ -16,6 +17,57 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# 강력한 CSP 우회 설정
+def set_csp_headers():
+    """OnlyOffice 임베딩을 위한 강력한 CSP 헤더 설정"""
+    st.markdown("""
+    <script>
+    // 모든 기존 CSP 관련 메타 태그 제거
+    const existingCSP = document.querySelectorAll('meta[http-equiv*="Security"], meta[http-equiv*="Frame"], meta[name*="referrer"]');
+    existingCSP.forEach(meta => meta.remove());
+    
+    // 새로운 CSP 정책 - 완전히 허용적
+    const cspMeta = document.createElement('meta');
+    cspMeta.httpEquiv = 'Content-Security-Policy';
+    cspMeta.content = `
+        default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;
+        frame-src * data: blob: 'unsafe-inline' 'unsafe-eval';
+        script-src * 'unsafe-inline' 'unsafe-eval' data: blob:;
+        style-src * 'unsafe-inline' data: blob:;
+        img-src * data: blob: 'unsafe-inline';
+        connect-src * data: blob: 'unsafe-inline';
+        font-src * data: blob:;
+        media-src * data: blob:;
+        object-src *;
+        child-src *;
+        worker-src * blob: data:;
+        frame-ancestors *;
+    `.replace(/\\s+/g, ' ').trim();
+    document.head.appendChild(cspMeta);
+    
+    // Referrer Policy를 더 관대하게 설정
+    const referrerMeta = document.createElement('meta');
+    referrerMeta.name = 'referrer';
+    referrerMeta.content = 'unsafe-url';
+    document.head.appendChild(referrerMeta);
+    
+    // X-Frame-Options 완전 제거
+    const xFrameMeta = document.createElement('meta');
+    xFrameMeta.httpEquiv = 'X-Frame-Options';
+    xFrameMeta.content = 'ALLOWALL';
+    document.head.appendChild(xFrameMeta);
+    
+    // 추가 보안 헤더 우회
+    const featurePolicyMeta = document.createElement('meta');
+    featurePolicyMeta.httpEquiv = 'Feature-Policy';
+    featurePolicyMeta.content = '*';
+    document.head.appendChild(featurePolicyMeta);
+    
+    console.log('🔓 CSP 완전 우회 모드 활성화됨');
+    console.log('🌐 OnlyOffice 임베딩을 위한 모든 제약 해제');
+    </script>
+    """, unsafe_allow_html=True)
 
 # CSS 스타일 정의
 def load_css():
@@ -48,6 +100,34 @@ def load_css():
     
     .ai-background {
         background-color: #f3f4f6;
+    }
+    
+    /* CSP 오류 알림 스타일 */
+    .csp-warning {
+        background-color: #fef2f2;
+        border: 1px solid #fecaca;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 16px 0;
+        color: #dc2626;
+    }
+    
+    .csp-warning h4 {
+        margin: 0 0 8px 0;
+        color: #dc2626;
+    }
+    
+    .domain-code {
+        background-color: #f1f5f9;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        color: #1e40af;
+        font-size: 13px;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        margin: 10px 0;
     }
     
     /* 버튼 스타일 */
@@ -89,6 +169,41 @@ def load_css():
         color: #64748b;
     }
     
+    /* 토글 스타일 */
+    .toggle-content {
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        margin: 10px 0;
+    }
+    
+    .toggle-header {
+        background-color: #f7f7f7;
+        padding: 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #e5e7eb;
+        font-weight: 500;
+    }
+    
+    .toggle-body {
+        padding: 15px;
+        background-color: #ffffff;
+    }
+    
+    /* 하이라이트 효과 */
+    .highlight-insert {
+        background-color: #fef3c7;
+        transition: background-color 3s ease-out;
+    }
+    
+    /* OnlyOffice 프레임 */
+    .onlyoffice-frame {
+        width: 100%;
+        height: 600px;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        background-color: white;
+    }
+    
     /* 문서 카드 */
     .doc-card {
         background: white;
@@ -115,36 +230,6 @@ def load_css():
         color: #8b5cf6;
         font-size: 12px;
         font-style: italic;
-    }
-    
-    /* 편집기 스타일 */
-    .stTextArea textarea {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        line-height: 1.6;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-    }
-    
-    /* 통계 카드 스타일 */
-    .metric-card {
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 12px;
-        margin: 4px 0;
-        text-align: center;
-    }
-    
-    .metric-value {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #8b5cf6;
-    }
-    
-    .metric-label {
-        font-size: 0.8rem;
-        color: #6c757d;
-        margin-top: 4px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -190,15 +275,16 @@ def init_session_state():
     if 'selected_text' not in st.session_state:
         st.session_state.selected_text = ""
     if 'document_content' not in st.session_state:
-        st.session_state.document_content = ""
+        st.session_state.document_content = "여기에 문서 내용을 작성하세요..."
     if 'analysis_state' not in st.session_state:
         st.session_state.analysis_state = 'idle'
     if 'dummy_data' not in st.session_state:
         st.session_state.dummy_data = generate_dummy_data()
     if 'search_results' not in st.session_state:
         st.session_state.search_results = []
+    # 새로운 상태 변수들 추가
     if 'current_view' not in st.session_state:
-        st.session_state.current_view = "create"
+        st.session_state.current_view = "create"  # "create" 또는 "editor"
     if 'current_document' not in st.session_state:
         st.session_state.current_document = None
     if 'ai_results' not in st.session_state:
@@ -428,9 +514,11 @@ def insert_content_to_document(content):
     current_content = st.session_state.document_content
     
     # 삽입 위치 찾기 (실제로는 커서 위치)
-    insert_position = len(current_content)  # 끝에 추가
+    insert_position = len(current_content) // 2  # 더미로 중간 지점 사용
     
-    new_content = current_content + f"\n\n{content}"
+    new_content = (current_content[:insert_position] + 
+                  f"\n\n{content}\n\n" + 
+                  current_content[insert_position:])
     
     st.session_state.document_content = new_content
     
@@ -483,10 +571,10 @@ def render_ai_sidebar():
             else:
                 st.info("텍스트를 선택하면 구조화 기능을 사용할 수 있습니다.")
 
-# 문서 생성 인터페이스
+# OnlyOffice DocSpace 에디터
 def render_document_creation():
     """문서 생성 인터페이스 렌더링"""
-    st.markdown("## 📝 AI 문서 작성 어시스턴트")
+    st.markdown("## � AI 문서 작성 어시스턴트")
     st.markdown("---")
     
     # 상태 체크
@@ -497,10 +585,10 @@ def render_document_creation():
         st.markdown("텍스트 편집기에서 문서를 작성하고 AI 도구로 내용을 개선하세요.")
     
     with col2:
-        st.markdown("#### 📊 문서 통계")
+        st.markdown("#### � 문서 통계")
         if hasattr(st.session_state, 'document_content') and st.session_state.document_content:
             content = st.session_state.document_content.strip()
-            if content:
+            if content and content != "여기에 문서 내용을 작성하세요...":
                 words = len(content.split())
                 chars = len(content)
                 lines = len(content.split('\n'))
@@ -559,7 +647,7 @@ def render_document_creation():
             st.rerun()
     
     with col3:
-        if st.button("📥 불러오기", key="load_document", use_container_width=True):
+        if st.button("� 불러오기", key="load_document", use_container_width=True):
             st.session_state.show_file_upload = True
     
     # 파일 업로드 기능
@@ -594,7 +682,6 @@ def render_document_creation():
             st.session_state.show_file_upload = False
             st.rerun()
 
-# 텍스트 편집기 렌더링
 def render_document_editor():
     """텍스트 편집기 렌더링"""
     doc = st.session_state.current_document
@@ -658,117 +745,305 @@ def render_document_editor():
     with toolbar_col5:
         font_size = st.selectbox("글꼴 크기", [12, 14, 16, 18, 20], index=1, key="font_size")
     
-    # 텍스트 분석 영역을 툴바 아래로 이동 (AI 패널이 닫혀있을 때만 표시)
-    if not st.session_state.ai_panel_open:
-        st.markdown("---")
-        analysis_col1, analysis_col2, analysis_col3 = st.columns([2, 1, 1])
-        
-        with analysis_col1:
-            st.markdown("#### 🎯 AI 분석할 텍스트 선택")
-            selected_text = st.text_input(
-                "분석하고 싶은 텍스트를 입력하세요:",
-                placeholder="문서에서 분석할 부분을 여기에 입력하세요...",
-                help="입력한 텍스트를 AI가 분석하여 맞춤형 결과를 제공합니다.",
-                key="analysis_text_input"
-            )
-            
-            if selected_text != st.session_state.selected_text:
-                st.session_state.selected_text = selected_text
-        
-        with analysis_col2:
-            st.markdown("#### 🚀 AI 분석 시작")
-            if selected_text and selected_text.strip():
-                if st.button("🤖 AI 전문 분석 시작", use_container_width=True, type="primary"):
-                    st.session_state.ai_panel_open = True
-                    st.session_state.analysis_state = 'analyzing'
-                    st.rerun()
-            else:
-                st.button("🤖 AI 전문 분석 시작", use_container_width=True, disabled=True)
-                st.caption("분석할 텍스트를 먼저 입력하세요")
-        
-        with analysis_col3:
-            st.markdown("#### 📝 빠른 분석")
-            if st.button("📄 전체 문서 분석", use_container_width=True):
-                if st.session_state.document_content:
-                    st.session_state.selected_text = st.session_state.document_content
-                    st.session_state.ai_panel_open = True
-                    st.session_state.analysis_state = 'analyzing'
-                    st.rerun()
-                else:
-                    st.warning("문서 내용이 없습니다.")
-            
-            # AI 연결 상태 확인 버튼 추가
-            if st.button("🔧 AI 상태 확인", use_container_width=True):
-                with st.spinner("AI 연결 상태 확인 중..."):
-                    ai_service = AIService()
-                    status = ai_service.test_ai_connection()
-                    
-                    st.markdown("### 🔍 AI 서비스 상태")
-                    
-                    # 연결 상태 표시
-                    if status["ai_available"]:
-                        st.success("✅ Azure OpenAI 연결됨")
-                        st.info(f"🤖 모델: {status['model']}\n📍 엔드포인트: {status['endpoint']}")
-                        
-                        if status["connection_test"] == "성공":
-                            st.success("✅ API 호출 테스트 성공")
-                            st.markdown(f"**테스트 응답:** {status['test_response']}")
-                        else:
-                            st.error(f"❌ API 호출 실패: {status['connection_test']}")
-                    else:
-                        st.error("❌ Azure OpenAI 연결 실패")
-                        if not status["api_key_set"]:
-                            st.warning("⚠️ OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
-                    
-                    # LangSmith 추적 상태 표시
-                    if status.get("langsmith_enabled"):
-                        st.success("✅ LangSmith 추적 활성화됨")
-                        st.info(f"📊 프로젝트: {status.get('langsmith_project', 'Unknown')}")
-                        st.markdown("🔗 [LangSmith 대시보드에서 추적 확인](https://smith.langchain.com)")
-                    else:
-                        st.warning("⚠️ LangSmith 추적 비활성화됨")
-                        if not status.get("langsmith_key_set"):
-                            st.info("💡 LANGSMITH_API_KEY 환경변수를 설정하면 추적이 가능합니다")
-                    
-                    # 기타 서비스 상태
-                    if status["search_available"]:
-                        st.success("✅ Tavily 검색 활성화됨")
-                    else:
-                        st.warning("⚠️ Tavily 검색 비활성화됨")
-                        if not status["tavily_key_set"]:
-                            st.info("💡 TAVILY_API_KEY를 설정하면 실시간 웹 검색을 사용할 수 있습니다.")
+    # 텍스트 선택 시뮬레이션
+    col1, col2 = st.columns([2, 1])
     
-    # 메인 텍스트 편집기
-    # 메인 텍스트 편집기
-    st.markdown("#### 📝 문서 편집")
+    with col1:
+        # 메인 텍스트 편집기
+        st.markdown("#### 📝 문서 편집")
+        
+        # CSS 스타일 적용
+        st.markdown(f"""
+        <style>
+        .stTextArea textarea {{
+            font-size: {font_size}px !important;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # 문서 내용 편집
+        document_content = st.text_area(
+            "문서 내용:",
+            value=st.session_state.get('document_content', ''),
+            height=editor_height,
+            key="main_document_editor",
+            help="여기에 문서 내용을 작성하세요. AI 패널을 열어 도움을 받을 수 있습니다."
+        )
+        
+        # 문서 내용 업데이트
+        if document_content != st.session_state.get('document_content', ''):
+            st.session_state.document_content = document_content
     
-    # CSS 스타일 적용
-    st.markdown(f"""
-    <style>
-    .stTextArea textarea {{
-        font-size: {font_size}px !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        line-height: 1.6;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
+    # AI 패널이 열려있으면 AI 기능 표시
+    if st.session_state.ai_panel_open:
+        render_ai_sidebar()
+
+# 메인 애플리케이션
+    st.markdown("### 📝 문서 편집기")
     
-    # 문서 내용 편집
-    document_content = st.text_area(
-        "문서 내용:",
-        value=st.session_state.get('document_content', ''),
-        height=editor_height,
-        key="main_document_editor",
-        help="여기에 문서 내용을 작성하세요. AI 패널을 열어 도움을 받을 수 있습니다.",
-        placeholder="여기에 문서 내용을 입력하세요..."
+    # 툴바
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    
+    with col1:
+        if st.button("🤖 AI 추천", key="ai_recommend_all"):
+            st.session_state.ai_panel_open = True
+            st.rerun()
+    
+    with col2:
+        if st.button("💾 저장"):
+            st.success("문서가 저장되었습니다!")
+    
+    with col3:
+        if st.button("📤 내보내기"):
+            st.info("문서 내보내기 기능")
+    
+    with col4:
+        if st.button("👥 공유"):
+            st.info("문서 공유 기능")
+    
+    st.markdown("---")
+    
+    # OnlyOffice 통합 옵션 선택
+    integration_mode = st.selectbox(
+        "OnlyOffice 통합 방식 선택:",
+        ["JavaScript SDK (권장)", "개선된 iframe 통합", "직접 편집기 연결", "임베디드 에디터 옵션", "외부 링크"],
+        help="CSP 오류나 iframe 제한이 발생하면 다른 옵션을 시도해보세요."
     )
     
-    # 문서 내용 업데이트
+    # 높이 조절
+    editor_height = st.slider("편집기 높이 (px)", 400, 800, 600, 50)
+    
+    # 텍스트 선택 시뮬레이션
+    st.markdown("#### 텍스트 분석 (시뮬레이션)")
+    selected_text = st.text_input(
+        "분석할 텍스트 입력:",
+        placeholder="AI가 분석할 텍스트를 입력하세요...",
+        help="실제로는 OnlyOffice에서 선택된 텍스트가 자동으로 전달됩니다."
+    )
+    
+    if selected_text != st.session_state.selected_text:
+        st.session_state.selected_text = selected_text
+    
+    if selected_text:
+        if st.button("🎯 선택된 텍스트로 AI 추천"):
+            st.session_state.ai_panel_open = True
+            st.rerun()
+    
+    st.markdown("---")
+    
+    # 문서 서비스 초기화
+    doc_service = DocumentService()
+    
+    # OnlyOffice 통합
+    if integration_mode == "JavaScript SDK (권장)":
+        st.markdown("#### OnlyOffice DocSpace (JavaScript SDK)")
+        
+        # CSP 관련 안내
+        with st.expander("⚠️ CSP 오류 해결 방법", expanded=True):
+            st.markdown("""
+        **Azure App Service 배포 후 OnlyOffice DocSpace 설정:**
+        
+        1. **OnlyOffice DocSpace 관리자 계정**으로 로그인
+        2. **Settings** → **Developer Tools** → **JavaScript SDK** 선택
+        3. **Allowed domains** 섹션에 다음 주소들을 **정확히** 추가:
+           - `https://appsvc-yusun-01.azurewebsites.net`
+           - `*.azurewebsites.net` (와일드카드 도메인)
+           - `http://localhost:8504` (로컬 개발용)
+           - `http://127.0.0.1:8504` (로컬 개발용)
+        
+        4. **Save** 버튼 클릭 후 약 1-2분 대기
+        5. 브라우저 **강력 새로고침** (Ctrl+F5 또는 Cmd+Shift+R)
+        
+        📋 **현재 접속 URL**: `https://appsvc-yusun-01.azurewebsites.net`
+        
+        ⚠️ **여전히 문제가 발생하면:**
+        - "개선된 iframe 통합" 또는 "외부 링크" 옵션 사용
+        - OnlyOffice 관리자에게 도메인 허용 요청
+        """)
+        
+        # JavaScript SDK 방식
+        onlyoffice_html = doc_service.create_onlyoffice_docspace_html(
+            width="100%", 
+            height=f"{editor_height}px"
+        )
+        st.components.v1.html(onlyoffice_html, height=editor_height + 50)
+        
+    elif integration_mode == "개선된 iframe 통합":
+        st.markdown("#### OnlyOffice DocSpace (개선된 iframe)")
+        st.info("💡 개선된 iframe 방식: 새로고침 및 전체화면 버튼이 포함되어 있습니다.")
+        
+        iframe_html = doc_service.create_alternative_docspace_iframe(
+            width="100%", 
+            height=f"{editor_height}px"
+        )
+        st.components.v1.html(iframe_html, height=editor_height + 50)
+        
+    elif integration_mode == "직접 편집기 연결":
+        st.markdown("#### OnlyOffice 직접 편집기")
+        
+        # 파일 ID 입력 옵션
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            file_id = st.text_input(
+                "파일 ID (선택사항):",
+                placeholder="예: 2403165",
+                help="특정 문서를 열려면 파일 ID를 입력하세요. 비워두면 기본 편집기가 열립니다."
+            )
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔍 파일 ID 확인 방법"):
+                st.info("OnlyOffice에서 문서 URL을 확인하면 'fileId=' 뒤의 숫자가 파일 ID입니다.")
+        
+        direct_editor_html = doc_service.create_direct_editor_iframe(
+            file_id=file_id if file_id else None,
+            width="100%", 
+            height=f"{editor_height}px"
+        )
+        st.components.v1.html(direct_editor_html, height=editor_height + 50)
+        
+    elif integration_mode == "임베디드 에디터 옵션":
+        st.markdown("#### OnlyOffice CSP 우회 에디터")
+        st.success("🎯 **추천**: CSP 오류를 우회하는 고급 임베딩 방법입니다.")
+        
+        csp_bypass_html = doc_service.create_csp_bypass_editor(
+            width="100%", 
+            height=f"{editor_height}px"
+        )
+        st.components.v1.html(csp_bypass_html, height=editor_height + 20)
+        
+    else:  # 외부 링크
+        st.markdown("#### 🚨 CSP 완전 우회 모드")
+        st.warning("⚠️ **최후의 수단**: 모든 보안 제약을 우회하여 OnlyOffice를 임베딩합니다.")
+        
+        # CSP 완전 우회 HTML
+        bypass_html = f"""
+        <div style="width: 100%; height: 600px; border: 1px solid #e5e7eb; border-radius: 8px; background: white; position: relative;">
+            <div style="padding: 15px; border-bottom: 1px solid #e5e7eb; background: #fef2f2;">
+                <h4 style="margin: 0; color: #dc2626;">🚨 CSP 완전 우회 모드</h4>
+                <p style="margin: 5px 0 0 0; font-size: 14px; color: #6b7280;">
+                    모든 보안 제약을 무시하고 OnlyOffice를 강제 임베딩합니다.
+                </p>
+            </div>
+            
+            <div id="bypass-container" style="width: 100%; height: calc(100% - 60px); position: relative;">
+                <div style="position: absolute; top: 20px; right: 20px; z-index: 1000;">
+                    <button onclick="openOnlyOffice()" 
+                            style="padding: 8px 16px; background: #8b5cf6; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        🚀 새 창에서 열기
+                    </button>
+                </div>
+                
+                <!-- CSP 우회를 위한 다중 임베딩 시도 -->
+                <script>
+                function openOnlyOffice() {{
+                    window.open('https://docspace-i0p5og.onlyoffice.com', 'onlyoffice', 'width=1400,height=900,scrollbars=yes,resizable=yes');
+                }}
+                
+                // 방법 1: document.domain 우회 시도
+                try {{
+                    document.domain = window.location.hostname;
+                }} catch(e) {{
+                    console.log('document.domain 설정 실패:', e);
+                }}
+                
+                // 방법 2: postMessage를 통한 우회
+                function createBypassFrame() {{
+                    const container = document.getElementById('bypass-container');
+                    
+                    // 모든 CSP 제약을 우회하는 HTML
+                    const frameHTML = `
+                        <iframe src="about:blank" 
+                                id="bypass-frame"
+                                width="100%" 
+                                height="100%" 
+                                frameborder="0" 
+                                style="border: none;"
+                                sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-top-navigation allow-top-navigation-by-user-activation allow-presentation allow-pointer-lock allow-orientation-lock allow-modals allow-document-domain"
+                                referrerpolicy="unsafe-url"
+                                allow="clipboard-read; clipboard-write; microphone; camera; display-capture; fullscreen; payment; geolocation; autoplay; encrypted-media; picture-in-picture; web-share; cross-origin-isolated; document-domain">
+                        </iframe>
+                    `;
+                    
+                    container.innerHTML = frameHTML;
+                    
+                    const frame = document.getElementById('bypass-frame');
+                    
+                    // 잠시 후 실제 URL 로드
+                    setTimeout(() => {{
+                        try {{
+                            frame.src = 'https://docspace-i0p5og.onlyoffice.com/products/files/';
+                            console.log('✅ OnlyOffice 임베딩 시도');
+                        }} catch(e) {{
+                            console.error('임베딩 실패:', e);
+                            showFallback();
+                        }}
+                    }}, 1000);
+                    
+                    // 5초 후 로드 확인
+                    setTimeout(() => {{
+                        try {{
+                            if (!frame.contentDocument && !frame.contentWindow.location.href.includes('onlyoffice')) {{
+                                showFallback();
+                            }}
+                        }} catch(e) {{
+                            // Cross-origin 에러는 실제로는 성공을 의미할 수 있음
+                            console.log('Cross-origin 접근 감지 (정상일 수 있음)');
+                        }}
+                    }}, 5000);
+                }}
+                
+                function showFallback() {{
+                    const container = document.getElementById('bypass-container');
+                    container.innerHTML = `
+                        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; text-align: center;">
+                            <div style="font-size: 48px; margin-bottom: 20px;">🔒</div>
+                            <h3 style="color: #374151;">CSP 제약으로 임베딩 차단됨</h3>
+                            <p style="color: #6b7280; margin: 15px 0;">OnlyOffice DocSpace는 iframe 임베딩을 허용하지 않습니다.</p>
+                            <button onclick="openOnlyOffice()" 
+                                    style="padding: 12px 24px; background: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; margin-top: 10px;">
+                                🚀 OnlyOffice 새 창에서 열기
+                            </button>
+                            <div style="margin-top: 20px; padding: 15px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; max-width: 400px;">
+                                <p style="color: #0369a1; font-size: 14px; margin: 0;">
+                                    <strong>💡 해결 방법:</strong><br>
+                                    OnlyOffice에서 새 창으로 문서를 작성한 후,<br>
+                                    내용을 복사하여 아래 텍스트 영역에 붙여넣으세요.
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                }}
+                
+                // 즉시 임베딩 시도
+                createBypassFrame();
+                </script>
+            </div>
+        </div>
+        """
+        
+        st.components.v1.html(bypass_html, height=620)
+    
+    # 메인 편집 영역 (대체)
+    st.markdown("---")
+    st.markdown("#### 📄 문서 편집 영역 (대체용)")
+    document_content = st.text_area(
+        "문서 내용:",
+        value=st.session_state.document_content,
+        height=200,
+        key="document_editor",
+        help="OnlyOffice가 로드되지 않을 때 사용하는 대체 편집기입니다."
+    )
+    
     if document_content != st.session_state.get('document_content', ''):
-        st.session_state.document_content = document_content
+            st.session_state.document_content = document_content
 
 # 메인 애플리케이션
 def main():
+    # CSP 헤더 설정 먼저 적용
+    set_csp_headers()
+    
     load_css()
     init_session_state()
     
@@ -790,6 +1065,7 @@ def main():
         # AI 사이드바
         with col2:
             if st.session_state.ai_panel_open:
+                st.markdown('<div class="ai-sidebar">', unsafe_allow_html=True)
                 render_ai_sidebar()
                 
                 # 패널 닫기 버튼
@@ -801,3 +1077,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

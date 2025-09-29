@@ -37,7 +37,7 @@ az webapp up \
     --name "$APP_NAME" \
     --resource-group "$RESOURCE_GROUP" \
     --location "$LOCATION" \
-    --runtime "PYTHON:3.13" \
+    --runtime "PYTHON:3.11" \
     --sku "$SKU" \
     --logs
 

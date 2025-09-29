@@ -7,51 +7,21 @@ import time
 import streamlit as st
 import json
 import re
-from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from tavily import TavilyClient
-from config import AI_CONFIG, TAVILY_CONFIG, LANGSMITH_CONFIG
-
-# LangSmith 추적 설정
-try:
-    if LANGSMITH_CONFIG["enabled"]:
-        from langsmith import Client, trace
-        import os
-        os.environ["LANGCHAIN_API_KEY"] = LANGSMITH_CONFIG["api_key"]
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_PROJECT"] = LANGSMITH_CONFIG["project_name"]
-        
-        langsmith_client = Client(api_key=LANGSMITH_CONFIG["api_key"])
-        LANGSMITH_AVAILABLE = True
-        print("✅ LangSmith 추적 활성화됨")
-    else:
-        LANGSMITH_AVAILABLE = False
-        print("⚠️ LangSmith API 키가 없습니다")
-except ImportError:
-    LANGSMITH_AVAILABLE = False
-    print("⚠️ LangSmith 패키지가 설치되지 않았습니다")
-except Exception as e:
-    LANGSMITH_AVAILABLE = False
-    print(f"⚠️ LangSmith 초기화 실패: {e}")
+from config import AI_CONFIG, TAVILY_CONFIG
 
 class AIService:
     def __init__(self):
-        # 초기화
-        self.use_legacy = False
-        self.legacy_client = None
-        self.langsmith_enabled = LANGSMITH_AVAILABLE
-        
         # Azure OpenAI 설정
         try:
             if AI_CONFIG["openai_api_key"] and AI_CONFIG["openai_endpoint"]:
-                # OpenAI 라이브러리 버전 호환성을 위한 설정
                 self.client = openai.AzureOpenAI(
                     azure_endpoint=AI_CONFIG["openai_endpoint"],
                     api_key=AI_CONFIG["openai_api_key"],
                     api_version=AI_CONFIG["api_version"]
                 )
                 self.ai_available = True
-                print("✅ Azure OpenAI 초기화 성공")
             else:
                 self.client = None
                 self.ai_available = False
@@ -60,20 +30,6 @@ class AIService:
             self.client = None
             self.ai_available = False
             print(f"⚠️ Azure OpenAI 초기화 실패: {e}")
-            # 호환성 문제인 경우 대체 초기화 시도
-            try:
-                import openai as openai_client
-                openai_client.api_type = "azure"
-                openai_client.api_base = AI_CONFIG["openai_endpoint"]
-                openai_client.api_version = AI_CONFIG["api_version"] 
-                openai_client.api_key = AI_CONFIG["openai_api_key"]
-                self.legacy_client = openai_client
-                self.ai_available = True
-                self.use_legacy = True
-                print("✅ 레거시 모드로 Azure OpenAI 초기화 성공")
-            except Exception as legacy_error:
-                self.use_legacy = False
-                print(f"⚠️ 레거시 모드도 실패: {legacy_error}")
         
         # Tavily 검색 클라이언트
         try:
@@ -94,40 +50,22 @@ class AIService:
         result = {
             "ai_available": self.ai_available,
             "search_available": self.search_available,
-            "langsmith_enabled": self.langsmith_enabled,
-            "langsmith_project": LANGSMITH_CONFIG.get("project_name", "없음"),
             "endpoint": AI_CONFIG.get("openai_endpoint", "없음"),
             "model": AI_CONFIG.get("deployment_name", "없음"),
             "api_key_set": bool(AI_CONFIG.get("openai_api_key")),
-            "tavily_key_set": bool(TAVILY_CONFIG.get("api_key")),
-            "langsmith_key_set": bool(LANGSMITH_CONFIG.get("api_key"))
+            "tavily_key_set": bool(TAVILY_CONFIG.get("api_key"))
         }
         
         if self.ai_available:
             try:
-                print("🔍 OpenAI 연결 테스트 중...")
-                
-                if hasattr(self, 'use_legacy') and self.use_legacy:
-                    # 레거시 모드 호출
-                    response = self.legacy_client.ChatCompletion.create(
-                        engine=AI_CONFIG["deployment_name"],
-                        messages=[{"role": "user", "content": "안녕하세요. 간단히 인사해주세요."}],
-                        max_tokens=50,
-                        temperature=0.1
-                    )
-                    result["test_response"] = response.choices[0].message.content
-                    result["mode"] = "legacy"
-                else:
-                    # 새로운 모드 호출
-                    response = self.client.chat.completions.create(
-                        model=AI_CONFIG["deployment_name"],
-                        messages=[{"role": "user", "content": "안녕하세요. 간단히 인사해주세요."}],
-                        max_tokens=50,
-                        temperature=0.1
-                    )
-                    result["test_response"] = response.choices[0].message.content
-                    result["mode"] = "modern"
-                    
+                # 간단한 테스트 호출
+                response = self.client.chat.completions.create(
+                    model=AI_CONFIG["deployment_name"],
+                    messages=[{"role": "user", "content": "안녕하세요. 간단히 인사해주세요."}],
+                    max_tokens=50,
+                    temperature=0.1
+                )
+                result["test_response"] = response.choices[0].message.content
                 result["connection_test"] = "성공"
                 print("✅ OpenAI 연결 테스트 성공")
             except Exception as e:
@@ -181,89 +119,6 @@ class AIService:
     
     def analyze_text(self, text: str, user_type: str = "general") -> Dict[str, Any]:
         """텍스트 분석 - 사용자 유형별 맞춤 분석"""
-        # LangSmith 추적 시작
-        if self.langsmith_enabled:
-            return self._analyze_text_with_langsmith(text, user_type)
-        else:
-            return self._analyze_text_core(text, user_type)
-    
-    def _analyze_text_with_langsmith(self, text: str, user_type: str = "general") -> Dict[str, Any]:
-        """LangSmith 추적과 함께 텍스트 분석 - LangChain 통합"""
-        try:
-            from langchain_openai import AzureChatOpenAI
-            
-            print("🔍 LangChain + LangSmith 추적 시작...")
-            
-            # LangChain OpenAI 클라이언트 (자동 LangSmith 추적)
-            llm = AzureChatOpenAI(
-                azure_endpoint=AI_CONFIG["openai_endpoint"],
-                api_key=AI_CONFIG["openai_api_key"],
-                api_version=AI_CONFIG["api_version"],
-                deployment_name=AI_CONFIG["deployment_name"],
-                temperature=AI_CONFIG["temperature"],
-                max_tokens=AI_CONFIG["max_tokens"],
-                model_kwargs={
-                    "metadata": {
-                        "user_type": user_type,
-                        "text_length": len(text),
-                        "project": "AI-Document-Assistant"
-                    }
-                }
-            )
-            
-            # 프롬프트 준비
-            system_prompt = self.get_smart_analysis_prompt(text, user_type)
-            
-            # LangChain invoke 호출 (자동으로 LangSmith에 추적됨)
-            messages = [
-                ("system", system_prompt),
-                ("human", f"다음 텍스트를 분석해주세요:\n\n{text}")
-            ]
-            
-            print("� LangChain Azure OpenAI API 호출 시작...")
-            start_time = time.time()
-            
-            response = llm.invoke(messages)
-            
-            end_time = time.time()
-            duration = end_time - start_time
-            
-            print("✅ LangChain Azure OpenAI API 호출 성공!")
-            print(f"📊 응답 길이: {len(response.content)} 문자")
-            print(f"⏱️ 호출 시간: {duration:.2f}초")
-            print("✅ LangSmith 자동 추적 완료 - https://smith.langchain.com에서 확인 가능")
-            
-            # 응답 내용
-            content = response.content
-            
-            # 구조화된 분석 결과 생성
-            analysis_result = self._parse_analysis_response(content, user_type)
-            
-            return {
-                "keywords": self._extract_keywords(text),
-                "topic": self._extract_topic(content),
-                "summary": self._extract_summary(content),
-                "analysis": analysis_result,
-                "user_type": user_type,
-                "original_text": text[:500] + "..." if len(text) > 500 else text,
-                "call_info": {
-                    "duration_seconds": duration,
-                    "response_length": len(content),
-                    "status": "success",
-                    "method": "langchain_azure_openai"
-                }
-            }
-            
-        except ImportError:
-            print("⚠️ LangChain OpenAI 패키지가 설치되지 않음 - 기본 모드로 전환")
-            return self._analyze_text_core(text, user_type)
-        except Exception as langchain_error:
-            print(f"⚠️ LangChain 추적 실패: {langchain_error}")
-            print("🔄 기본 OpenAI 모드로 분석 계속...")
-            return self._analyze_text_core(text, user_type)
-    
-    def _analyze_text_core(self, text: str, user_type: str = "general") -> Dict[str, Any]:
-        """핵심 텍스트 분석 로직"""
         if not text.strip():
             return {"keywords": [], "topic": "", "context": "", "summary": "", "analysis": {}}
         
@@ -283,73 +138,20 @@ class AIService:
             print(f"📍 Endpoint: {AI_CONFIG['openai_endpoint']}")
             print(f"🤖 Model: {AI_CONFIG['deployment_name']}")
             
-            # API 호출 시작 시간 기록
-            start_time = time.time()
-            
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"다음 텍스트를 분석해주세요:\n\n{text}"}
-            ]
-            
-            # LangSmith 로깅을 위한 호출 정보
-            call_info = {
-                "messages": messages,
-                "model": AI_CONFIG["deployment_name"],
-                "max_tokens": AI_CONFIG["max_tokens"],
-                "temperature": AI_CONFIG["temperature"],
-                "user_type": user_type,
-                "input_length": len(text)
-            }
-            
-            if self.langsmith_enabled:
-                print("📝 LangSmith 호출 정보 기록 중...")
-            
-            if hasattr(self, 'use_legacy') and self.use_legacy:
-                # 레거시 모드 호출
-                print("🔧 레거시 모드로 API 호출")
-                response = self.legacy_client.ChatCompletion.create(
-                    engine=AI_CONFIG["deployment_name"],
-                    messages=messages,
-                    max_tokens=AI_CONFIG["max_tokens"],
-                    temperature=AI_CONFIG["temperature"]
-                )
-            else:
-                # 새로운 모드 호출
-                print("🔧 모던 모드로 API 호출")
-                response = self.client.chat.completions.create(
-                    model=AI_CONFIG["deployment_name"],
-                    messages=messages,
-                    max_tokens=AI_CONFIG["max_tokens"],
-                    temperature=AI_CONFIG["temperature"]
-                )
-            
-            # API 호출 종료 시간 및 성능 메트릭
-            end_time = time.time()
-            duration = end_time - start_time
+            response = self.client.chat.completions.create(
+                model=AI_CONFIG["deployment_name"],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"다음 텍스트를 분석해주세요:\n\n{text}"}
+                ],
+                max_tokens=AI_CONFIG["max_tokens"],
+                temperature=AI_CONFIG["temperature"]
+            )
             
             print("✅ Azure OpenAI API 호출 성공!")
             print(f"📊 응답 길이: {len(response.choices[0].message.content)} 문자")
-            print(f"⏱️ 호출 시간: {duration:.2f}초")
-            
-            # 토큰 사용량 정보 (가능한 경우)
-            if hasattr(response, 'usage') and response.usage:
-                print(f"🎯 토큰 사용량: {response.usage.total_tokens} (입력: {response.usage.prompt_tokens}, 출력: {response.usage.completion_tokens})")
-                call_info["token_usage"] = {
-                    "total_tokens": response.usage.total_tokens,
-                    "prompt_tokens": response.usage.prompt_tokens,
-                    "completion_tokens": response.usage.completion_tokens
-                }
             
             content = response.choices[0].message.content
-            
-            # LangSmith 응답 정보 추가
-            if self.langsmith_enabled:
-                call_info.update({
-                    "response_length": len(content),
-                    "duration_seconds": duration,
-                    "status": "success"
-                })
-                print("📝 LangSmith 응답 정보 기록 완료")
             
             # 구조화된 분석 결과 생성
             analysis_result = self._parse_analysis_response(content, user_type)
@@ -360,22 +162,11 @@ class AIService:
                 "summary": self._extract_summary(content),
                 "analysis": analysis_result,
                 "user_type": user_type,
-                "original_text": text[:500] + "..." if len(text) > 500 else text,
-                "call_info": call_info if self.langsmith_enabled else None
+                "original_text": text[:500] + "..." if len(text) > 500 else text
             }
             
         except Exception as e:
             print(f"❌ Azure OpenAI API 호출 실패: {str(e)}")
-            
-            # LangSmith 에러 정보
-            if self.langsmith_enabled:
-                error_info = {
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "status": "failed"
-                }
-                print("📝 LangSmith 에러 정보 기록")
-            
             st.error(f"AI 분석 중 오류 발생: {str(e)}")
             return self._get_dummy_analysis(text, user_type)
     

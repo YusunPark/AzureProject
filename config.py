@@ -44,6 +44,14 @@ TAVILY_CONFIG = {
     "max_results": 10
 }
 
+# LangSmith 추적 설정
+LANGSMITH_CONFIG = {
+    "api_key": os.getenv("LANGSMITH_API_KEY"),
+    "project_name": "AI-Document-Assistant",
+    "endpoint": "https://api.smith.langchain.com",
+    "enabled": bool(os.getenv("LANGSMITH_API_KEY"))
+}
+
 # 데이터베이스 설정
 DATABASE_CONFIG = {
     "host": "localhost",
