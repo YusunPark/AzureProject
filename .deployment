@@ -1,0 +1,21 @@
+{
+    "version": "0.1",
+    "stack": "python",
+    "platform": {
+        "os": "linux"
+    },
+    "build": {
+        "commands": [
+            "pip install -r requirements.txt"
+        ]
+    },
+    "run": {
+        "command": "bash startup.sh"
+    },
+    "environmentVariables": {
+        "SCM_DO_BUILD_DURING_DEPLOYMENT": "true",
+        "WEBSITES_PORT": "8000",
+        "STREAMLIT_SERVER_PORT": "8000",
+        "STREAMLIT_SERVER_ADDRESS": "0.0.0.0"
+    }
+}

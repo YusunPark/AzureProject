@@ -4,8 +4,17 @@
 import os
 from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+# Azure App Service 환경 감지
+IS_AZURE_APP_SERVICE = os.getenv('WEBSITE_SITE_NAME') is not None
+
+# 환경에 따라 .env 파일 로드
+if IS_AZURE_APP_SERVICE:
+    print("🔵 Azure App Service 환경에서 실행 중")
+    # Azure에서는 환경 변수를 직접 사용
+else:
+    print("🟢 로컬 환경에서 실행 중")
+    # 로컬에서는 .env 파일 로드
+    load_dotenv()
 
 # OnlyOffice DocSpace 설정
 ONLYOFFICE_CONFIG = {
