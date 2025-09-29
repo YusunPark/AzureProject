@@ -186,7 +186,7 @@ def generate_dummy_data():
 # 세션 상태 초기화
 def init_session_state():
     if 'ai_panel_open' not in st.session_state:
-        st.session_state.ai_panel_open = False
+        st.session_state.ai_panel_open = True  # 기본값을 True로 변경
     if 'selected_text' not in st.session_state:
         st.session_state.selected_text = ""
     if 'document_content' not in st.session_state:
@@ -203,6 +203,117 @@ def init_session_state():
         st.session_state.current_document = None
     if 'ai_results' not in st.session_state:
         st.session_state.ai_results = {}
+
+# 강화된 AI 분석 프로세스 실행
+def run_enhanced_analysis_process(user_input: str):
+    """
+    개선된 동기적 3단계 AI 분석 프로세스 (API 호출 최적화)
+    1. 프롬프트 재생성 (사용자 의도 파악)
+    2. 병렬 검색 (사내 문서 + 외부 레퍼런스)
+    3. 통합 분석 결과 생성 (단일 API 호출)
+    """
+    
+    # 중복 실행 방지 - 동일한 입력에 대해서는 캐시된 결과 사용
+    input_hash = str(hash(user_input))
+    if st.session_state.get('last_analysis_hash') == input_hash:
+        st.info("이미 분석된 내용입니다. 기존 결과를 표시합니다.")
+        return
+    
+    try:
+        st.session_state.last_analysis_hash = input_hash
+        # 전체 진행 상황 표시
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # AI 서비스 초기화
+        status_text.text("🔧 AI 서비스 초기화 중...")
+        ai_service = AIService()
+        progress_bar.progress(10)
+        
+        # 1단계: 사용자 의도 파악 및 프롬프트 재생성
+        st.markdown("### 🔄 1단계: 사용자 의도 분석 및 프롬프트 최적화")
+        status_text.text("🧠 사용자 의도 분석 중...")
+        
+        with st.spinner("사용자 의도를 분석하고 AI가 더 잘 이해할 수 있도록 프롬프트를 재생성하고 있습니다..."):
+            enhanced_prompt = ai_service.enhance_user_prompt(user_input)
+            st.session_state.enhanced_prompt = enhanced_prompt
+        
+        progress_bar.progress(30)
+        st.success("✅ 1단계 완료: 프롬프트 재생성")
+        
+        with st.expander("🔍 재생성된 프롬프트 확인"):
+            st.markdown(f"**원본 입력:**\n{user_input}")
+            st.markdown(f"**AI 최적화 프롬프트:**\n{enhanced_prompt}")
+        
+        # 2단계: 순차적 검색 수행 (동기적 실행)
+        st.markdown("### 🔄 2단계: 다중 소스 검색")
+        
+        # 2-1단계: 사내 문서 RAG 검색
+        st.markdown("#### 📁 2-1. 사내 문서 검색 (Azure AI Search)")
+        status_text.text("📚 사내 문서 검색 중...")
+        
+        with st.spinner("사내 문서 데이터베이스에서 관련 자료를 검색하고 있습니다..."):
+            internal_docs = ai_service.search_internal_documents(enhanced_prompt)
+            st.session_state.internal_search_results = internal_docs
+        
+        progress_bar.progress(50)
+        st.success(f"✅ 2-1단계 완료: 사내 문서 {len(internal_docs)}개 발견")
+        
+        # 2-2단계: 사외 인터넷 검색
+        st.markdown("#### 🌐 2-2. 외부 레퍼런스 검색 (Tavily)")
+        status_text.text("🌍 외부 레퍼런스 검색 중...")
+        
+        with st.spinner("인터넷에서 유사 사례와 레퍼런스를 검색하고 있습니다..."):
+            external_docs = ai_service.search_external_references(enhanced_prompt)
+            st.session_state.external_search_results = external_docs
+        
+        progress_bar.progress(70)
+        st.success(f"✅ 2-2단계 완료: 외부 참조 {len(external_docs)}개 발견")
+        
+        # 3단계: 통합 분석 결과 생성 (단일 API 호출로 최적화)
+        st.markdown("### 🔄 3단계: 통합 분석 결과 생성")
+        status_text.text("🤖 AI 분석 결과 생성 중...")
+        
+        with st.spinner("검색 결과를 바탕으로 통합 분석 결과를 생성하고 있습니다..."):
+            # 기존 4번의 API 호출을 1번으로 최적화
+            analysis_result = ai_service.generate_optimized_analysis(
+                enhanced_prompt, 
+                internal_docs, 
+                external_docs,
+                user_input
+            )
+            st.session_state.analysis_result = analysis_result
+        
+        progress_bar.progress(100)
+        status_text.text("✅ 모든 단계 완료!")
+        
+        st.success("✅ 3단계 완료: 통합 분석 결과 생성")
+        
+        # 결과 표시
+        st.markdown("#### 🎯 AI 분석 결과")
+        st.markdown(analysis_result.get('content', '분석 결과를 생성하지 못했습니다.'))
+        
+        # 검색 결과 요약 표시
+        if internal_docs or external_docs:
+            with st.expander("📊 검색 결과 요약"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**📁 사내 문서 결과**")
+                    for i, doc in enumerate(internal_docs[:3], 1):
+                        st.markdown(f"{i}. {doc.get('title', 'N/A')}")
+                
+                with col2:
+                    st.markdown("**🌐 외부 레퍼런스**")
+                    for i, doc in enumerate(external_docs[:3], 1):
+                        st.markdown(f"{i}. {doc.get('title', 'N/A')}")
+            
+    except Exception as e:
+        st.error(f"분석 프로세스 중 오류 발생: {str(e)}")
+        progress_bar.progress(0)
+        status_text.text("❌ 오류 발생")
+        # 폴백으로 기존 방식 실행
+        show_analysis_progress()
 
 # AI 분석 진행 상태 표시
 def show_analysis_progress():
@@ -239,6 +350,121 @@ def show_analysis_progress():
     
     progress_container.markdown(final_html, unsafe_allow_html=True)
     st.success("✅ AI 분석이 완료되었습니다!")
+
+# 강화된 분석 결과 표시 
+def show_enhanced_analysis_results():
+    """3단계 완료 후 검색 결과 요약 표시"""
+    st.markdown("### 🎯 강화된 분석 결과 요약")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if hasattr(st.session_state, 'internal_search_results'):
+            internal_count = len(st.session_state.internal_search_results)
+            st.metric("📁 사내 문서", f"{internal_count}개")
+            if internal_count > 0:
+                st.caption("Azure AI Search로 검색됨")
+        else:
+            st.metric("📁 사내 문서", "0개")
+    
+    with col2:
+        if hasattr(st.session_state, 'external_search_results'):
+            external_count = len(st.session_state.external_search_results) 
+            st.metric("🌐 외부 레퍼런스", f"{external_count}개")
+            if external_count > 0:
+                st.caption("Tavily 검색으로 발견됨")
+        else:
+            st.metric("🌐 외부 레퍼런스", "0개")
+    
+    with col3:
+        if hasattr(st.session_state, 'analysis_versions'):
+            versions_count = len(st.session_state.analysis_versions)
+            st.metric("📋 분석 버전", f"{versions_count}개")
+            st.caption("다양한 관점의 결과 생성")
+        else:
+            st.metric("📋 분석 버전", "0개")
+
+def show_multiple_analysis_versions():
+    """여러 버전의 분석 결과 표시"""
+    if not hasattr(st.session_state, 'analysis_versions') or not st.session_state.analysis_versions:
+        st.warning("분석 결과가 없습니다. AI 분석을 먼저 실행해주세요.")
+        return
+    
+    st.markdown("### 🎯 다양한 관점의 분석 결과")
+    st.markdown("동일한 주제에 대해 여러 관점에서 분석한 결과를 확인하고 가장 적합한 버전을 선택하세요.")
+    
+    versions = st.session_state.analysis_versions
+    
+    # 버전 선택 탭
+    version_titles = [f"{v['title']}" for v in versions]
+    selected_tab = st.radio(
+        "분석 버전을 선택하세요:",
+        options=range(len(versions)),
+        format_func=lambda x: version_titles[x],
+        key="analysis_version_selector"
+    )
+    
+    # 선택된 버전 표시
+    if 0 <= selected_tab < len(versions):
+        selected_version = versions[selected_tab]
+        
+        # 헤더 정보
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            st.markdown(f"#### {selected_version['title']}")
+            st.caption(selected_version['description'])
+        
+        with col2:
+            confidence = selected_version.get('confidence', 0.8) 
+            st.metric("신뢰도", f"{confidence:.0%}")
+        
+        with col3:
+            priority = selected_version.get('priority', 1)
+            priority_text = ["🔥 최우선", "⚡ 높음", "📋 보통", "💡 참고"][min(priority-1, 3)]
+            st.metric("우선순위", priority_text)
+        
+        # 내용 표시
+        st.markdown("---")
+        st.markdown(selected_version['content'])
+        
+        # 액션 버튼
+        st.markdown("---")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📝 문서에 삽입", key=f"insert_version_{selected_tab}"):
+                insert_content_to_document(selected_version['content'])
+                st.success("✅ 선택한 분석 결과가 문서에 삽입되었습니다!")
+        
+        with col2:
+            if st.button("📋 클립보드 복사", key=f"copy_version_{selected_tab}"):
+                st.write("클립보드 복사 기능 (브라우저 제한으로 수동 복사 필요)")
+                st.code(selected_version['content'], language='markdown')
+        
+        with col3:
+            if st.button("📊 상세 분석", key=f"detail_version_{selected_tab}"):
+                with st.expander("🔍 상세 분석 정보", expanded=True):
+                    st.markdown("**생성 기준:**")
+                    if hasattr(st.session_state, 'enhanced_prompt'):
+                        st.markdown(f"- 최적화된 프롬프트: {st.session_state.enhanced_prompt}")
+                    
+                    st.markdown("**참조 자료:**")
+                    if hasattr(st.session_state, 'internal_search_results'):
+                        st.markdown(f"- 사내 문서 {len(st.session_state.internal_search_results)}개")
+                    if hasattr(st.session_state, 'external_search_results'): 
+                        st.markdown(f"- 외부 레퍼런스 {len(st.session_state.external_search_results)}개")
+    
+    # 전체 버전 비교 (확장 가능)
+    with st.expander("🔄 모든 버전 비교 보기"):
+        for i, version in enumerate(versions):
+            st.markdown(f"#### {i+1}. {version['title']}")
+            st.markdown(f"**설명:** {version['description']}")
+            st.markdown(f"**신뢰도:** {version.get('confidence', 0.8):.0%} | **우선순위:** {version.get('priority', 1)}")
+            
+            # 내용 미리보기 (처음 200자)
+            preview = version['content'][:200] + "..." if len(version['content']) > 200 else version['content']
+            st.markdown(f"**미리보기:**\n{preview}")
+            st.markdown("---")
 
 # 문서 추천 결과 표시
 def show_recommendations(search_query=""):
@@ -458,26 +684,60 @@ def render_ai_sidebar():
     
     # AI 분석 시작 버튼
     if st.button("🚀 AI 분석 시작"):
-        st.session_state.analysis_state = 'analyzing'
-        show_analysis_progress()
-        st.session_state.analysis_state = 'completed'
-        st.rerun()
+        # 분석 중복 실행 방지
+        if st.session_state.get('analysis_state') != 'analyzing':
+            st.session_state.analysis_state = 'analyzing'
+            
+            # 실제 AI 분석 프로세스 실행
+            search_query = st.session_state.selected_text if search_mode == "선택된 텍스트 기반" else st.session_state.document_content
+            
+            # 디버깅 정보 표시
+            st.write(f"🔍 디버그 정보:")
+            st.write(f"- 검색 모드: {search_mode}")
+            st.write(f"- 선택된 텍스트: {st.session_state.get('selected_text', 'None')}")
+            st.write(f"- 문서 내용 길이: {len(str(st.session_state.get('document_content', '')))}")
+            st.write(f"- 최종 쿼리 길이: {len(str(search_query)) if search_query else 0}")
+            
+            if search_query and search_query.strip():
+                st.success("✅ 분석을 시작합니다...")
+                run_enhanced_analysis_process(search_query.strip())
+            else:
+                st.error("❌ 분석할 내용이 없습니다. 문서에 내용을 입력하거나 텍스트를 선택해주세요.")
+                # 테스트용 기본 내용 제공
+                if st.button("📝 테스트용 샘플 내용으로 분석하기"):
+                    test_query = "AI와 머신러닝을 활용한 비즈니스 프로세스 개선 방안에 대해 분석해주세요."
+                    st.info(f"테스트 쿼리로 분석합니다: {test_query}")
+                    run_enhanced_analysis_process(test_query)
+            
+            st.session_state.analysis_state = 'completed'
     
     # 분석 완료 후 결과 표시
     if st.session_state.analysis_state == 'completed':
-        tabs = st.tabs(["📚 문서 추천", "✨ 문장 다듬기", "🏗️ 구조화"])
+        
+        # 강화된 분석 결과가 있는 경우
+        if hasattr(st.session_state, 'analysis_versions') and st.session_state.analysis_versions:
+            show_enhanced_analysis_results()
+        
+        # 기존 탭 방식도 유지
+        tabs = st.tabs(["🎯 다중 분석 결과", "📚 문서 추천", "✨ 문장 다듬기", "🏗️ 구조화"])
         
         with tabs[0]:
+            if hasattr(st.session_state, 'analysis_versions'):
+                show_multiple_analysis_versions()
+            else:
+                st.info("강화된 분석 결과가 없습니다. AI 분석을 다시 실행해주세요.")
+        
+        with tabs[1]:
             search_query = st.session_state.selected_text if search_mode == "선택된 텍스트 기반" else ""
             show_recommendations(search_query)
         
-        with tabs[1]:
+        with tabs[2]:
             if st.session_state.selected_text:
                 show_text_refinement(st.session_state.selected_text)
             else:
                 st.info("텍스트를 선택하면 문장 다듬기 기능을 사용할 수 있습니다.")
         
-        with tabs[2]:
+        with tabs[3]:
             if st.session_state.selected_text:
                 show_structuring(st.session_state.selected_text)
             else:

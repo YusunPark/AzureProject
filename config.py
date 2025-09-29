@@ -3,6 +3,13 @@
 """
 import os
 from dotenv import load_dotenv
+AZURE_SEARCH_CONFIG = {
+    "endpoint": os.getenv("AZURE_SEARCH_ENDPOINT"),
+    "admin_key": os.getenv("AZURE_SEARCH_ADMIN_KEY"),
+    "api_key": os.getenv("AZURE_SEARCH_API_KEY"),
+    "index_name": os.getenv("AZURE_SEARCH_INDEX_NAME", "doc-index"),
+    "api_version": "2019-05-06"
+}
 
 # Azure App Service 환경 감지
 IS_AZURE_APP_SERVICE = os.getenv('WEBSITE_SITE_NAME') is not None
@@ -42,6 +49,15 @@ TAVILY_CONFIG = {
     "api_key": os.getenv("TAVILY_API_KEY"),
     "search_depth": "advanced",
     "max_results": 10
+}
+
+# Azure Search 설정
+AZURE_SEARCH_CONFIG = {
+    "endpoint": os.getenv("AZURE_SEARCH_ENDPOINT"),
+    "admin_key": os.getenv("AZURE_SEARCH_ADMIN_KEY"),
+    "api_key": os.getenv("AZURE_SEARCH_API_KEY"),
+    "index_name": os.getenv("AZURE_SEARCH_INDEX_NAME", "doc-index"),
+    "api_version": "2019-05-06"
 }
 
 # LangSmith 추적 설정

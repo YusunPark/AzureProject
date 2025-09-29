@@ -10,7 +10,7 @@ import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 from tavily import TavilyClient
-from config import AI_CONFIG, TAVILY_CONFIG, LANGSMITH_CONFIG
+from config import AI_CONFIG, TAVILY_CONFIG, LANGSMITH_CONFIG, AZURE_SEARCH_CONFIG
 
 # LangSmith 추적 설정
 try:
@@ -88,6 +88,46 @@ class AIService:
             self.tavily_client = None
             self.search_available = False
             print(f"⚠️ Tavily 초기화 실패: {e}")
+        
+        # 캐시 시스템 초기화 (중복 API 호출 방지)
+        self._cache = {}
+        self._cache_ttl = 300  # 5분 캐시
+        
+        # Azure Search 클라이언트
+        try:
+            if AZURE_SEARCH_CONFIG["endpoint"] and AZURE_SEARCH_CONFIG["admin_key"]:
+                import requests
+                self.azure_search_available = True
+                self.azure_search_endpoint = AZURE_SEARCH_CONFIG["endpoint"]
+                self.azure_search_key = AZURE_SEARCH_CONFIG["admin_key"]
+                self.azure_search_index = AZURE_SEARCH_CONFIG["index_name"]
+                self.azure_search_api_version = AZURE_SEARCH_CONFIG["api_version"]
+                print("✅ Azure Search 초기화 성공")
+            else:
+                self.azure_search_available = False
+                print("⚠️ Azure Search 설정이 없습니다. 로컬 검색을 사용합니다.")
+        except Exception as e:
+            self.azure_search_available = False
+            print(f"⚠️ Azure Search 초기화 실패: {e}")
+    
+    def _get_cache_key(self, method: str, query: str) -> str:
+        """캐시 키 생성"""
+        return f"{method}:{hash(query)}"
+    
+    def _get_cached_result(self, cache_key: str):
+        """캐시된 결과 조회"""
+        if cache_key in self._cache:
+            timestamp, result = self._cache[cache_key]
+            if time.time() - timestamp < self._cache_ttl:
+                return result
+            else:
+                # 만료된 캐시 삭제
+                del self._cache[cache_key]
+        return None
+    
+    def _set_cache(self, cache_key: str, result):
+        """결과 캐시 저장"""
+        self._cache[cache_key] = (time.time(), result)
     
     def test_ai_connection(self) -> Dict[str, Any]:
         """AI 연결 상태 테스트"""
@@ -496,13 +536,14 @@ class AIService:
             # 사용자 타입별 검색 쿼리 최적화
             search_query = self._optimize_search_query(query, keywords, user_type)
             
-            # Tavily 검색 실행
+            # Tavily 검색 실행 (디버깅 로그 추가)
+            print(f"🔍 Tavily 호출 시작: query='{search_query}', depth={TAVILY_CONFIG['search_depth']}, max={TAVILY_CONFIG['max_results']}")
             response = self.tavily_client.search(
                 query=search_query,
                 search_depth=TAVILY_CONFIG["search_depth"],
-                max_results=TAVILY_CONFIG["max_results"],
-                include_domains=self._get_relevant_domains(user_type)
+                max_results=TAVILY_CONFIG["max_results"]
             )
+            print(f"✅ Tavily 응답 수신: {len(response.get('results', []))}개 결과")
             
             # 결과 변환 및 필터링
             documents = []
@@ -525,6 +566,10 @@ class AIService:
             return documents[:6]  # 최대 6개
             
         except Exception as e:
+            print(f"❌ 외부 검색 실패: {str(e)}")
+            print(f"❌ 오류 타입: {type(e).__name__}")
+            import traceback
+            print(f"❌ 상세 오류: {traceback.format_exc()}")
             st.warning(f"실시간 검색 중 오류 발생: {str(e)} - 로컬 데이터를 사용합니다.")
             return self._get_intelligent_dummy_results(query, keywords, user_type)
     
@@ -965,6 +1010,582 @@ A: 지속적인 모니터링과 피드백이 중요합니다.
 
 [더미 모드로 생성된 구조입니다]"""
     
+    def enhance_user_prompt(self, user_input: str) -> str:
+        """1단계: 사용자 입력을 AI가 더 잘 이해할 수 있도록 프롬프트 재생성 (캐시 적용)"""
+        
+        # 캐시 확인
+        cache_key = self._get_cache_key("enhance_prompt", user_input)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result:
+            print(f"💾 캐시된 프롬프트 재생성 결과 사용")
+            return cached_result
+            
+        if not self.ai_available:
+            fallback = f"[프롬프트 최적화] {user_input}"
+            self._set_cache(cache_key, fallback)
+            return fallback
+        
+        try:
+            system_prompt = """
+            당신은 사용자의 의도를 정확히 파악하여 AI가 더 효과적으로 분석할 수 있도록 
+            프롬프트를 최적화하는 전문가입니다.
+            
+            사용자의 입력을 분석하여:
+            1. 핵심 의도와 목적을 파악하세요
+            2. 구체적인 질문이나 요구사항으로 변환하세요  
+            3. 검색에 유용한 키워드들을 포함하세요
+            4. 명확하고 구조화된 프롬프트로 재작성하세요
+            
+            결과는 AI가 더 정확한 분석을 할 수 있도록 구체적이고 명확해야 합니다.
+            """
+            
+            response = self.client.chat.completions.create(
+                model=AI_CONFIG["deployment_name"],
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"다음 사용자 입력을 분석하여 AI가 더 잘 이해할 수 있는 구체적인 프롬프트로 재생성해주세요:\n\n{user_input}"}
+                ],
+                max_tokens=500,
+                temperature=0.3
+            )
+            
+            enhanced_prompt = response.choices[0].message.content.strip()
+            
+            # 결과 캐시 저장
+            self._set_cache(cache_key, enhanced_prompt)
+            return enhanced_prompt
+            
+        except Exception as e:
+            print(f"프롬프트 재생성 실패: {e}")
+            fallback = f"[최적화된 프롬프트] {user_input} - 구체적인 분석 요청"
+            self._set_cache(cache_key, fallback)
+            return fallback
+    
+    def search_internal_documents(self, enhanced_prompt: str) -> List[Dict[str, Any]]:
+        """2-1단계: 사내 문서 RAG 검색 (Azure AI Search) - 캐시 적용"""
+        
+        # 캐시 확인
+        cache_key = self._get_cache_key("internal_search", enhanced_prompt)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result:
+            print(f"💾 캐시된 사내 검색 결과 사용")
+            return cached_result
+            
+        try:
+            if self.azure_search_available:
+                # 실제 Azure Search API 호출
+                result = self._search_azure_search_api(enhanced_prompt)
+                self._set_cache(cache_key, result)
+                return result
+            else:
+                # Azure Search 사용 불가능시 로컬 검색
+                result = self._search_local_documents(enhanced_prompt)
+                self._set_cache(cache_key, result)
+                return result
+            
+        except Exception as e:
+            print(f"사내 문서 검색 실패: {e}")
+            fallback = self._get_dummy_internal_results(enhanced_prompt)
+            self._set_cache(cache_key, fallback)
+            return fallback
+    
+    def _search_azure_search_api(self, query: str) -> List[Dict[str, Any]]:
+        """실제 Azure Search API 검색"""
+        import requests
+        
+        try:
+            # Azure Search REST API 호출
+            search_url = f"{self.azure_search_endpoint}/indexes/{self.azure_search_index}/docs/search"
+            
+            headers = {
+                'Content-Type': 'application/json',
+                'api-key': self.azure_search_key
+            }
+            
+            # 검색 쿼리 구성
+            search_body = {
+                "search": query,
+                "searchMode": "any",
+                "queryType": "simple",
+                "select": "*",  # 모든 필드 선택 (실제로는 필요한 필드만 선택)
+                "top": 10,  # 최대 10개 결과
+                "highlight": "content",  # 내용 하이라이트
+                "count": True
+            }
+            
+            params = {
+                'api-version': self.azure_search_api_version
+            }
+            
+            print(f"🔍 Azure Search API 호출: {query}")
+            response = requests.post(search_url, headers=headers, json=search_body, params=params)
+            
+            if response.status_code == 200:
+                results = response.json()
+                documents = results.get('value', [])
+                total_count = results.get('@odata.count', 0)
+                
+                print(f"✅ Azure Search 결과: {len(documents)}개 (총 {total_count}개)")
+                
+                # 결과 변환
+                converted_docs = []
+                for i, doc in enumerate(documents):
+                    converted_doc = {
+                        "id": doc.get("id", f"azure_doc_{i}"),
+                        "title": doc.get("title", doc.get("Title", "제목 없음")),
+                        "content": doc.get("content", doc.get("Content", "")),
+                        "summary": self._extract_summary_from_azure_doc(doc),
+                        "source_detail": f"Azure AI Search - {self.azure_search_index}",
+                        "relevance_score": doc.get("@search.score", 1.0) / 10.0,  # 점수 정규화
+                        "search_type": "azure_search",
+                        "keywords": self._extract_keywords_from_azure_doc(doc),
+                        "highlights": doc.get("@search.highlights", {})
+                    }
+                    converted_docs.append(converted_doc)
+                
+                return converted_docs[:5]  # 상위 5개
+                
+            else:
+                print(f"❌ Azure Search API 오류: {response.status_code} - {response.text}")
+                return self._search_local_documents(query)
+                
+        except Exception as e:
+            print(f"❌ Azure Search API 호출 실패: {e}")
+            return self._search_local_documents(query)
+    
+    def _extract_summary_from_azure_doc(self, doc: Dict) -> str:
+        """Azure Search 문서에서 요약 추출"""
+        # 다양한 필드명 시도
+        summary_fields = ["summary", "Summary", "description", "Description", "abstract", "Abstract"]
+        
+        for field in summary_fields:
+            if field in doc and doc[field]:
+                return doc[field][:300] + "..." if len(doc[field]) > 300 else doc[field]
+        
+        # 요약 필드가 없으면 content에서 첫 부분 추출
+        content = doc.get("content", doc.get("Content", ""))
+        if content:
+            sentences = content.split('.')[:3]  # 처음 3문장
+            return '. '.join(sentences) + "..." if len(sentences) >= 3 else content[:200] + "..."
+        
+        return "요약 없음"
+    
+    def _extract_keywords_from_azure_doc(self, doc: Dict) -> List[str]:
+        """Azure Search 문서에서 키워드 추출"""
+        # 키워드 필드가 있으면 사용
+        keyword_fields = ["keywords", "Keywords", "tags", "Tags", "categories", "Categories"]
+        
+        for field in keyword_fields:
+            if field in doc and doc[field]:
+                if isinstance(doc[field], list):
+                    return doc[field][:5]
+                elif isinstance(doc[field], str):
+                    return doc[field].split(',')[:5]
+        
+        # 키워드 필드가 없으면 제목과 내용에서 추출
+        text = (doc.get("title", "") + " " + doc.get("content", "")).lower()
+        return self._extract_keywords(text)[:5]
+    
+    def _search_local_documents(self, enhanced_prompt: str) -> List[Dict[str, Any]]:
+        """로컬 샘플 데이터에서 검색 (Azure Search 대체)"""
+        try:
+            # 로컬 샘플 데이터에서 관련 문서 검색
+            with open('data/sample_documents.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            documents = data.get("documents", [])
+            
+            # 검색어 기반 관련도 계산
+            search_terms = enhanced_prompt.lower().split()
+            relevant_docs = []
+            
+            for doc in documents:
+                relevance_score = 0
+                content = (doc.get("title", "") + " " + doc.get("content", "") + " " + " ".join(doc.get("keywords", []))).lower()
+                
+                # 키워드 매칭으로 관련도 계산
+                for term in search_terms:
+                    if term in content:
+                        relevance_score += content.count(term) * 0.1
+                
+                if relevance_score > 0.3:
+                    doc_copy = doc.copy()
+                    doc_copy["relevance_score"] = min(1.0, relevance_score)
+                    doc_copy["search_type"] = "local_search"
+                    doc_copy["source_detail"] = f"로컬 문서 DB - {doc.get('source', 'Unknown')}"
+                    relevant_docs.append(doc_copy)
+            
+            # 관련도순 정렬
+            relevant_docs.sort(key=lambda x: x["relevance_score"], reverse=True)
+            print(f"📁 로컬 검색 결과: {len(relevant_docs)}개")
+            return relevant_docs[:5]  # 상위 5개
+            
+        except Exception as e:
+            print(f"로컬 문서 검색 실패: {e}")
+            return self._get_dummy_internal_results(enhanced_prompt)
+    
+    def _get_dummy_internal_results(self, enhanced_prompt: str) -> List[Dict[str, Any]]:
+        """더미 사내 문서 결과"""
+        return [
+            {
+                "id": "internal_1",
+                "title": "사내 정책 문서 - 관련 가이드라인",
+                "summary": f"'{enhanced_prompt[:30]}...'와 관련된 사내 정책 및 가이드라인입니다.",
+                "content": f"사내에서 {enhanced_prompt[:50]}...에 대한 표준 절차와 방법론을 정의한 문서입니다.",
+                "source_detail": "사내 문서 관리 시스템 (더미)",
+                "relevance_score": 0.9,
+                "search_type": "dummy",
+                "keywords": ["정책", "가이드라인", "절차"]
+            }
+        ]
+    
+    def search_external_references(self, enhanced_prompt: str) -> List[Dict[str, Any]]:
+        """2-2단계: 사외 인터넷 검색 (Tavily) - 유사사례, 레퍼런스 (캐시 적용)"""
+        
+        # 캐시 확인
+        cache_key = self._get_cache_key("external_search", enhanced_prompt)
+        cached_result = self._get_cached_result(cache_key)
+        if cached_result:
+            print(f"💾 캐시된 외부 검색 결과 사용")
+            return cached_result
+            
+        try:
+            if self.search_available and self.tavily_client:
+                # Tavily로 실제 웹 검색 (디버깅 로그 추가)
+                # enhanced_prompt가 너무 길면 처음 100자만 사용
+                short_prompt = enhanced_prompt[:100] if len(enhanced_prompt) > 100 else enhanced_prompt
+                search_query = f"{short_prompt} 사례 레퍼런스 best practice"
+                print(f"🔍 Tavily 외부검색 호출: query='{search_query}', depth=advanced, max=6")
+                response = self.tavily_client.search(
+                    query=search_query,
+                    search_depth="advanced",
+                    max_results=6
+                )
+                print(f"✅ Tavily 외부검색 응답: {len(response.get('results', []))}개 결과")
+                
+                external_docs = []
+                for i, result in enumerate(response.get("results", [])):
+                    doc = {
+                        "id": f"external_{i+1}",
+                        "title": result.get("title", "제목 없음"),
+                        "summary": result.get("content", "")[:300] + "...",
+                        "content": result.get("content", ""),
+                        "source_detail": f"외부 참조 - {result.get('url', '')}",
+                        "url": result.get("url", ""),
+                        "relevance_score": result.get("score", 0.5),
+                        "search_type": "external",
+                        "keywords": self._extract_keywords(result.get("content", ""))[:5]
+                    }
+                    external_docs.append(doc)
+                
+                # 결과 캐시 저장
+                self._set_cache(cache_key, external_docs)
+                return external_docs
+                
+            else:
+                # Tavily 사용 불가능시 더미 데이터
+                fallback = self._get_dummy_external_results(enhanced_prompt)
+                self._set_cache(cache_key, fallback)
+                return fallback
+                
+        except Exception as e:
+            print(f"❌ 외부 검색 실패: {str(e)}")
+            print(f"❌ 오류 타입: {type(e).__name__}")
+            import traceback
+            print(f"❌ 상세 오류:\n{traceback.format_exc()}")
+            fallback = self._get_dummy_external_results(enhanced_prompt)
+            self._set_cache(cache_key, fallback)
+            return fallback
+    
+    def _get_dummy_external_results(self, enhanced_prompt: str) -> List[Dict[str, Any]]:
+        """외부 검색 더미 결과"""
+        return [
+            {
+                "id": "external_1",
+                "title": f"Best Practices for {enhanced_prompt[:30]}... - Industry Report",
+                "summary": f"업계에서 검증된 {enhanced_prompt[:20]}...에 대한 모범 사례와 성공 사례들을 정리한 보고서입니다.",
+                "content": f"다양한 기업들이 {enhanced_prompt[:30]}... 관련 프로젝트에서 얻은 인사이트와 교훈들을 종합한 자료입니다.",
+                "source_detail": "외부 참조 - Industry Research Portal",
+                "url": "https://example.com/best-practices",
+                "relevance_score": 0.85,
+                "search_type": "external",
+                "keywords": ["best practice", "industry", "case study"]
+            },
+            {
+                "id": "external_2", 
+                "title": f"Case Study: Successful Implementation of {enhanced_prompt[:25]}...",
+                "summary": f"실제 기업에서 {enhanced_prompt[:20]}...를 성공적으로 구현한 사례 연구입니다.",
+                "content": f"A사에서 {enhanced_prompt[:30]}... 프로젝트를 통해 얻은 성과와 구현 과정의 세부사항을 다룹니다.",
+                "source_detail": "외부 참조 - Business Case Studies",
+                "url": "https://example.com/case-study",
+                "relevance_score": 0.82,
+                "search_type": "external", 
+                "keywords": ["case study", "implementation", "success"]
+            }
+        ]
+    
+    def generate_optimized_analysis(self, enhanced_prompt: str, internal_docs: List[Dict], external_docs: List[Dict], original_input: str) -> Dict[str, Any]:
+        """3단계: 최적화된 통합 분석 결과 생성 (단일 API 호출)"""
+        try:
+            if not self.ai_available:
+                return self._get_fallback_analysis(enhanced_prompt, internal_docs, external_docs)
+            
+            # 검색 결과 요약
+            internal_summary = self._summarize_search_results(internal_docs, "사내 문서")
+            external_summary = self._summarize_search_results(external_docs, "외부 레퍼런스")
+            
+            # 통합 분석을 위한 프롬프트 구성
+            system_prompt = """당신은 전문적인 비즈니스 분석가입니다. 
+사용자의 요청을 분석하고, 제공된 사내 문서와 외부 레퍼런스를 종합하여 
+실용적이고 구체적인 분석 결과를 제공해주세요.
+
+분석 결과는 다음 구조로 작성해주세요:
+1. 요약 및 핵심 인사이트
+2. 사내 관점 분석
+3. 외부 벤치마킹 분석
+4. 통합 권고사항
+5. 구체적 실행 방안"""
+
+            user_prompt = f"""
+## 분석 요청
+**원본 입력:** {original_input}
+**최적화된 분석 범위:** {enhanced_prompt}
+
+## 검색 결과
+### 사내 문서 분석
+{internal_summary}
+
+### 외부 레퍼런스 분석
+{external_summary}
+
+위 정보를 바탕으로 종합적이고 실용적인 분석 결과를 제공해주세요.
+"""
+
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                max_tokens=2000,
+                temperature=0.7
+            )
+            
+            analysis_content = response.choices[0].message.content
+            
+            return {
+                "title": "🎯 통합 AI 분석 결과",
+                "content": analysis_content,
+                "internal_docs_count": len(internal_docs),
+                "external_docs_count": len(external_docs),
+                "confidence": 0.9,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            
+        except Exception as e:
+            print(f"최적화된 분석 생성 실패: {e}")
+            return self._get_fallback_analysis(enhanced_prompt, internal_docs, external_docs)
+    
+    def _get_fallback_analysis(self, prompt: str, internal_docs: List[Dict], external_docs: List[Dict]) -> Dict[str, Any]:
+        """API 호출 실패 시 폴백 분석"""
+        return {
+            "title": "📋 기본 분석 결과",
+            "content": f"""
+## 📋 분석 결과 (폴백 모드)
+
+### 🎯 분석 요청
+{prompt[:200]}...
+
+### 📊 검색 결과 요약
+- **사내 문서**: {len(internal_docs)}개 문서 검색됨
+- **외부 레퍼런스**: {len(external_docs)}개 참조 자료 발견
+
+### 💡 기본 인사이트
+검색된 자료들을 바탕으로 추가 분석이 필요합니다. 
+AI 서비스 연결 후 다시 시도해주세요.
+
+### 🔍 참고 자료
+""" + "\n".join([f"- {doc.get('title', 'N/A')}" for doc in (internal_docs + external_docs)[:5]]),
+            "internal_docs_count": len(internal_docs),
+            "external_docs_count": len(external_docs),
+            "confidence": 0.5,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+    def generate_multiple_analysis_versions(self, enhanced_prompt: str, internal_docs: List[Dict], external_docs: List[Dict], original_input: str) -> List[Dict[str, Any]]:
+        """3단계: 여러 버전의 분석 결과 생성 (레거시 지원용)"""
+        try:
+            # 최적화된 버전을 사용하되, 기존 형식으로 래핑
+            optimized_result = self.generate_optimized_analysis(enhanced_prompt, internal_docs, external_docs, original_input)
+            
+            # 기존 다중 버전 형식으로 변환
+            return [{
+                "title": optimized_result["title"],
+                "description": "사내 문서와 외부 레퍼런스를 통합한 최적화된 분석",
+                "content": optimized_result["content"],
+                "priority": 1,
+                "confidence": optimized_result["confidence"]
+            }]
+            
+        except Exception as e:
+            print(f"다중 버전 생성 실패: {e}")
+            return self._get_dummy_analysis_versions(enhanced_prompt, original_input)
+    
+    def _summarize_search_results(self, docs: List[Dict], source_type: str) -> str:
+        """검색 결과 요약"""
+        if not docs:
+            return f"{source_type}에서 관련 자료를 찾지 못했습니다."
+        
+        summaries = []
+        for doc in docs[:3]:  # 상위 3개만
+            title = doc.get("title", "제목 없음")
+            summary = doc.get("summary", "")[:100]
+            summaries.append(f"- {title}: {summary}...")
+        
+        return f"{source_type} 검색 결과 ({len(docs)}개):\n" + "\n".join(summaries)
+    
+    def _generate_comprehensive_version(self, prompt: str, internal_summary: str, external_summary: str, original_input: str) -> Dict[str, Any]:
+        """종합 분석 버전"""
+        return {
+            "title": "🎯 종합 분석 (사내+외부 통합)",
+            "description": "사내 문서와 외부 레퍼런스를 종합한 균형잡힌 분석",
+            "content": f"""
+## 🎯 종합 분석 결과
+
+### 📋 분석 개요
+**원본 요청:** {original_input[:100]}...
+**최적화된 분석 범위:** {prompt[:150]}...
+
+### 🏢 사내 관점
+{internal_summary}
+
+### 🌐 외부 벤치마킹
+{external_summary}
+
+### 💡 통합 인사이트
+1. **사내-외부 gap 분석**: 현재 사내 방식과 업계 모범사례 비교
+2. **적용 가능한 외부 사례**: 우리 조직에 적합한 레퍼런스 식별  
+3. **균형잡힌 접근법**: 내부 역량과 외부 트렌드를 모두 고려한 방향성
+
+### 🚀 통합 실행 방안
+- 단기: 사내 기준 보완 + 외부 모범사례 일부 도입
+- 중기: 점진적 외부 표준 적용 
+- 장기: 사내 고유 모델과 업계 표준의 최적 조합
+""",
+            "priority": 1,
+            "confidence": 0.9
+        }
+    
+    def _generate_internal_focused_version(self, prompt: str, internal_docs: List[Dict], original_input: str) -> Dict[str, Any]:
+        """사내 중심 분석 버전"""
+        return {
+            "title": "🏢 사내 정책 중심 분석", 
+            "description": "기존 사내 문서와 정책을 기반으로 한 분석",
+            "content": f"""
+## 🏢 사내 정책 중심 분석
+
+### 📋 분석 기준
+기존 사내 문서, 정책, 가이드라인을 기반으로 현실적이고 실행 가능한 방안을 제시합니다.
+
+### 📚 참조 사내 자료
+""" + "\n".join([f"- {doc.get('title', '')}: {doc.get('summary', '')[:100]}..." for doc in internal_docs[:3]]) + f"""
+
+### 💼 사내 관점 분석
+1. **현행 정책 부합성**: 기존 사내 규정과의 정합성 검토
+2. **내부 리소스 활용**: 현재 가용한 인력, 예산, 시스템 고려
+3. **조직 문화 적합성**: 우리 조직의 특성에 맞는 접근법
+
+### 🎯 사내 실행 방안
+- **즉시 실행 가능**: 기존 프로세스 개선
+- **단기 적용**: 현행 정책 범위 내 변화
+- **승인 필요**: 정책 변경이 필요한 중장기 계획
+""",
+            "priority": 2,
+            "confidence": 0.85
+        }
+    
+    def _generate_external_focused_version(self, prompt: str, external_docs: List[Dict], original_input: str) -> Dict[str, Any]:
+        """외부 벤치마킹 중심 분석 버전"""  
+        return {
+            "title": "🌐 외부 벤치마킹 분석",
+            "description": "업계 모범사례와 외부 레퍼런스 중심의 혁신적 접근",
+            "content": f"""
+## 🌐 외부 벤치마킹 분석
+
+### 🎯 분석 관점
+업계 선도 기업들의 모범사례와 최신 트렌드를 바탕으로 혁신적 방안을 제시합니다.
+
+### 📊 외부 레퍼런스
+""" + "\n".join([f"- {doc.get('title', '')}: {doc.get('summary', '')[:100]}..." for doc in external_docs[:3]]) + f"""
+
+### 🏆 업계 모범사례 분석
+1. **선도기업 사례**: 업계 1위 기업들의 접근법 
+2. **혁신적 방법론**: 최신 트렌드와 신기술 활용
+3. **성공 요인**: 외부 성공사례의 핵심 포인트
+
+### 🚀 혁신 실행 방안  
+- **벤치마킹 포인트**: 즉시 참고할 수 있는 외부 사례
+- **적용 로드맵**: 단계적 도입을 위한 계획
+- **차별화 전략**: 우리만의 고유한 경쟁우위 창출
+""",
+            "priority": 3,
+            "confidence": 0.8
+        }
+    
+    def _generate_action_focused_version(self, prompt: str, internal_summary: str, external_summary: str, original_input: str) -> Dict[str, Any]:
+        """실행 계획 중심 분석 버전"""
+        return {
+            "title": "⚡ 실행 계획 중심 분석",
+            "description": "구체적이고 실행 가능한 액션 플랜 중심의 분석", 
+            "content": f"""
+## ⚡ 실행 계획 중심 분석
+
+### 🎯 실행 우선순위
+즉시 실행 가능한 것부터 단계적으로 추진할 수 있는 구체적 방안을 제시합니다.
+
+### 🚀 즉시 실행 (1-2주)
+1. **현황 파악**: 관련 데이터 수집 및 분석  
+2. **팀 구성**: 실행 담당자 및 지원팀 편성
+3. **초기 계획**: 세부 실행 계획 수립
+
+### 📅 단기 실행 (1-3개월)  
+1. **파일럿 운영**: 소규모 테스트 실행
+2. **피드백 수집**: 초기 결과 분석 및 개선점 파악
+3. **프로세스 정립**: 표준 운영 절차 확립
+
+### 🎯 중장기 실행 (3-12개월)
+1. **전면 도입**: 조직 전체로 확대 적용  
+2. **성과 측정**: KPI 기반 성과 평가
+3. **지속 개선**: 정기적 리뷰 및 업데이트
+
+### 📊 필요 리소스 및 예산
+- **인력**: 프로젝트 매니저 1명, 실행팀 3-5명
+- **예산**: 초기 투자 및 운영 비용 계획
+- **시스템**: 필요 도구 및 인프라 구축
+""",
+            "priority": 4, 
+            "confidence": 0.9
+        }
+    
+    def _get_dummy_analysis_versions(self, enhanced_prompt: str, original_input: str) -> List[Dict[str, Any]]:
+        """더미 분석 버전들"""
+        return [
+            {
+                "title": "🎯 종합 분석 (더미)",
+                "description": "사내외 자료를 종합한 균형잡힌 분석",
+                "content": f"[더미 모드] {enhanced_prompt}에 대한 종합적 분석 결과입니다.",
+                "priority": 1,
+                "confidence": 0.7
+            },
+            {
+                "title": "🏢 사내 정책 중심 (더미)",
+                "description": "기존 사내 기준에 맞춘 현실적 방안",
+                "content": f"[더미 모드] 사내 정책을 기반으로 한 {enhanced_prompt} 분석입니다.",
+                "priority": 2, 
+                "confidence": 0.7
+            }
+        ]
+
     def generate_action_plan(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
         """분석 결과 기반 액션 플랜 생성"""
         if not self.ai_available:
