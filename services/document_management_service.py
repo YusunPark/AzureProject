@@ -9,7 +9,7 @@ from datetime import datetime
 import streamlit as st
 
 from utils.azure_storage_service import AzureStorageService
-from utils.simple_azure_search import AzureSearchService
+from utils.azure_search_management import AzureSearchService
 
 class DocumentManagementService:
     def __init__(self):

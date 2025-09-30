@@ -270,29 +270,29 @@ def _save_document(doc):
 def _show_ai_status_check():
     """AI 상태 확인 표시"""
     with st.spinner("AI 연결 상태 확인 중..."):
-        from utils.ai_service import AIService
-        ai_service = AIService()
-        status = ai_service.test_ai_connection()
+        from services.ai_analysis_orchestrator import AIAnalysisOrchestrator
+        orchestrator = AIAnalysisOrchestrator()
         
         st.markdown("### 🔍 AI 서비스 상태")
         
         # 연결 상태 표시
-        if status["ai_available"]:
+        if orchestrator.azure_search.available and orchestrator.openai_client:
             st.success("✅ Azure OpenAI 연결됨")
-            st.info(f"🤖 모델: {status['model']}\n📍 엔드포인트: {status['endpoint']}")
-            
-            if status["connection_test"] == "성공":
-                st.success("✅ API 호출 테스트 성공")
-                st.markdown(f"**테스트 응답:** {status['test_response']}")
-            else:
-                st.error(f"❌ API 호출 실패: {status['connection_test']}")
+            st.info(f"🤖 모델: GPT-4o\n📍 Azure OpenAI 서비스")
+            st.success("✅ AI 분석 오케스트레이터 준비 완료")
         else:
-            st.error("❌ Azure OpenAI 연결 실패")
-            if not status["api_key_set"]:
-                st.warning("⚠️ OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
+            st.error("❌ AI 서비스 연결 실패")
+            st.warning("⚠️ Azure OpenAI 또는 Azure Search 설정을 확인해주세요.")
         
         # 기타 서비스 상태
-        if status["search_available"]:
-            st.success("✅ Tavily 검색 활성화됨")
+        if orchestrator.azure_search.available:
+            st.success("✅ Azure AI Search 활성화됨")
         else:
-            st.warning("⚠️ Tavily 검색 비활성화됨")
+            st.warning("⚠️ Azure AI Search 비활성화됨")
+        
+        # Tavily API 상태 확인
+        import os
+        if os.getenv("TAVILY_API_KEY"):
+            st.success("✅ Tavily 검색 API 활성화됨")
+        else:
+            st.warning("⚠️ Tavily 검색 API 비활성화됨")

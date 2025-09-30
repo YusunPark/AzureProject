@@ -1,416 +1,314 @@
 """
-AI 서비스 모듈 - 간소화된 버전
-핵심 기능만 유지하고 불필요한 코드 제거
+AI 서비스 모듈 - 간소화된 버전 (리팩토링용)
 """
 import openai
 import streamlit as st
 import json
-import re
-from datetime import datetime
-from typing import List, Dict, Any
-from tavily import TavilyClient
-from config import AI_CONFIG, TAVILY_CONFIG, LANGSMITH_CONFIG, AZURE_SEARCH_CONFIG
+from typing import List, Dict, Any, Optional
+from config import AI_CONFIG, TAVILY_CONFIG
 
 class AIService:
+    """AI 서비스 클래스"""
+    
     def __init__(self):
-        self.ai_available = False
-        self.search_available = False
-        self.azure_search_available = False
-        self._init_services()
+        """AI 서비스 초기화"""
+        self.client = None
+        self._initialize_openai_client()
     
-    def _init_services(self):
-        """서비스 초기화"""
-        self._init_openai()
-        self._init_tavily()
-        self._init_azure_search()
-    
-    def _init_openai(self):
-        """Azure OpenAI 초기화"""
+    def _initialize_openai_client(self):
+        """OpenAI 클라이언트 초기화"""
         try:
-            if AI_CONFIG["openai_api_key"] and AI_CONFIG["openai_endpoint"]:
+            if AI_CONFIG.get("openai_api_key") and AI_CONFIG.get("openai_endpoint"):
                 self.client = openai.AzureOpenAI(
-                    azure_endpoint=AI_CONFIG["openai_endpoint"],
                     api_key=AI_CONFIG["openai_api_key"],
+                    azure_endpoint=AI_CONFIG["openai_endpoint"],
                     api_version=AI_CONFIG["api_version"]
                 )
-                self.ai_available = True
-                print("✅ Azure OpenAI 초기화 성공")
-            else:
-                self.client = None
-                print("⚠️ Azure OpenAI 설정이 없습니다.")
         except Exception as e:
-            self.client = None
-            print(f"⚠️ Azure OpenAI 초기화 실패: {e}")
+            st.warning(f"OpenAI 클라이언트 초기화 실패: {str(e)}")
     
-    def _init_tavily(self):
-        """Tavily 검색 초기화"""
-        try:
-            if TAVILY_CONFIG["api_key"]:
-                self.tavily_client = TavilyClient(api_key=TAVILY_CONFIG["api_key"])
-                self.search_available = True
-            else:
-                self.tavily_client = None
-                print("⚠️ Tavily API 키가 없습니다.")
-        except Exception as e:
-            self.tavily_client = None
-            print(f"⚠️ Tavily 초기화 실패: {e}")
-    
-    def _init_azure_search(self):
-        """Azure Search 초기화"""
-        try:
-            if AZURE_SEARCH_CONFIG["endpoint"] and AZURE_SEARCH_CONFIG["admin_key"]:
-                self.azure_search_available = True
-                self.azure_search_endpoint = AZURE_SEARCH_CONFIG["endpoint"]
-                self.azure_search_key = AZURE_SEARCH_CONFIG["admin_key"]
-                self.azure_search_index = AZURE_SEARCH_CONFIG["index_name"]
-                print("✅ Azure Search 초기화 성공")
-            else:
-                self.azure_search_available = False
-                print("⚠️ Azure Search 설정이 없습니다.")
-        except Exception as e:
-            self.azure_search_available = False
-            print(f"⚠️ Azure Search 초기화 실패: {e}")
-    
-    def test_ai_connection(self) -> Dict[str, Any]:
-        """AI 연결 상태 테스트"""
-        result = {
-            "ai_available": self.ai_available,
-            "search_available": self.search_available,
-            "endpoint": AI_CONFIG.get("openai_endpoint", "없음"),
-            "model": AI_CONFIG.get("deployment_name", "없음"),
-            "api_key_set": bool(AI_CONFIG.get("openai_api_key")),
-            "tavily_key_set": bool(TAVILY_CONFIG.get("api_key"))
-        }
-        
-        if self.ai_available:
-            try:
-                response = self.client.chat.completions.create(
-                    model=AI_CONFIG["deployment_name"],
-                    messages=[{"role": "user", "content": "안녕하세요."}],
-                    max_tokens=50,
-                    temperature=0.1
-                )
-                result["test_response"] = response.choices[0].message.content
-                result["connection_test"] = "성공"
-            except Exception as e:
-                result["connection_test"] = f"실패: {str(e)}"
-                result["test_response"] = None
-        else:
-            result["connection_test"] = "AI 사용 불가능"
+    def refine_user_prompt(self, context: str) -> str:
+        """사용자 프롬프트 고도화"""
+        if not self.client:
+            return context
             
-        return result
-    
-    def enhance_user_prompt(self, user_input: str) -> str:
-        """사용자 프롬프트 최적화"""
-        if not self.ai_available:
-            return f"[프롬프트 최적화] {user_input}"
-        
         try:
             response = self.client.chat.completions.create(
                 model=AI_CONFIG["deployment_name"],
                 messages=[
-                    {"role": "system", "content": "사용자 입력을 분석하여 더 구체적이고 검색에 유용한 프롬프트로 재작성해주세요."},
-                    {"role": "user", "content": f"다음을 분석용 프롬프트로 최적화: {user_input}"}
+                    {"role": "system", "content": "사용자의 요청을 더 구체적이고 명확하게 개선해주세요."},
+                    {"role": "user", "content": f"다음 요청을 개선해주세요: {context}"}
                 ],
                 max_tokens=500,
                 temperature=0.3
             )
-            return response.choices[0].message.content.strip()
+            return response.choices[0].message.content
         except Exception as e:
-            print(f"프롬프트 최적화 실패: {e}")
-            return f"[최적화된 프롬프트] {user_input}"
+            st.warning(f"프롬프트 고도화 실패: {str(e)}")
+            return context
     
-    def search_internal_documents(self, query: str) -> List[Dict[str, Any]]:
-        """사내 문서 검색"""
-        if self.azure_search_available:
-            return self._search_azure_search(query)
-        else:
-            return self._search_local_documents(query)
-    
-    def _search_azure_search(self, query: str) -> List[Dict[str, Any]]:
-        """Azure Search 검색"""
+    def generate_search_queries(self, enhanced_prompt: str) -> Dict[str, str]:
+        """검색 쿼리 생성"""
+        if not self.client:
+            return {"internal": enhanced_prompt, "external": enhanced_prompt}
+            
         try:
-            import requests
-            
-            search_url = f"{self.azure_search_endpoint}/indexes/{self.azure_search_index}/docs/search"
-            headers = {
-                'Content-Type': 'application/json',
-                'api-key': self.azure_search_key
-            }
-            
-            search_body = {
-                "search": query,
-                "top": 5
-            }
-            
-            response = requests.post(search_url, headers=headers, json=search_body, 
-                                   params={'api-version': AZURE_SEARCH_CONFIG["api_version"]})
-            
-            if response.status_code == 200:
-                results = response.json().get('value', [])
-                return [self._convert_azure_doc(doc, i) for i, doc in enumerate(results)]
-            else:
-                return self._search_local_documents(query)
-        except Exception as e:
-            print(f"Azure Search 실패: {e}")
-            return self._search_local_documents(query)
-    
-    def _convert_azure_doc(self, doc: dict, index: int) -> Dict[str, Any]:
-        """Azure Search 문서 변환"""
-        return {
-            "id": doc.get("id", f"azure_doc_{index}"),
-            "title": doc.get("title", "제목 없음"),
-            "content": doc.get("content", ""),
-            "summary": doc.get("content", "")[:200] + "...",
-            "source_detail": f"Azure AI Search - {self.azure_search_index}",
-            "relevance_score": doc.get("@search.score", 1.0) / 10.0,
-            "search_type": "azure_search"
-        }
-    
-    def _search_local_documents(self, query: str) -> List[Dict[str, Any]]:
-        """로컬 문서 검색"""
-        try:
-            with open('data/sample_documents.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            documents = data.get("documents", [])[:3]
-            for doc in documents:
-                doc["search_type"] = "local"
-                doc["source_detail"] = f"로컬 DB - {doc.get('source', 'Unknown')}"
-            
-            return documents
-        except Exception:
-            return [self._get_dummy_internal_doc(query)]
-    
-    def _get_dummy_internal_doc(self, query: str) -> Dict[str, Any]:
-        """더미 사내 문서"""
-        return {
-            "id": "dummy_internal",
-            "title": f"사내 정책 - {query[:20]}... 관련",
-            "summary": f"{query[:30]}...와 관련된 사내 가이드라인입니다.",
-            "content": f"사내에서 {query}에 대한 표준 절차를 정의한 문서입니다.",
-            "source_detail": "사내 문서 시스템",
-            "relevance_score": 0.8,
-            "search_type": "dummy"
-        }
-    
-    def search_external_references(self, query: str) -> List[Dict[str, Any]]:
-        """외부 레퍼런스 검색"""
-        if not self.search_available:
-            return [self._get_dummy_external_doc(query)]
-        
-        try:
-            response = self.tavily_client.search(
-                query=query,
-                search_depth="advanced",
-                max_results=5
+            response = self.client.chat.completions.create(
+                model=AI_CONFIG["deployment_name"],
+                messages=[
+                    {"role": "system", "content": "사내 문서 검색용과 외부 검색용 쿼리를 각각 생성해주세요. JSON 형식으로 반환하세요."},
+                    {"role": "user", "content": f"요청: {enhanced_prompt}"}
+                ],
+                max_tokens=300,
+                temperature=0.3
             )
             
-            return [self._convert_tavily_doc(result, i) for i, result in enumerate(response.get("results", []))]
+            result = response.choices[0].message.content
+            try:
+                queries = json.loads(result)
+                return {
+                    "internal": queries.get("internal", enhanced_prompt),
+                    "external": queries.get("external", enhanced_prompt)
+                }
+            except:
+                return {"internal": enhanced_prompt, "external": enhanced_prompt}
+                
         except Exception as e:
-            print(f"외부 검색 실패: {e}")
-            return [self._get_dummy_external_doc(query)]
+            st.warning(f"검색 쿼리 생성 실패: {str(e)}")
+            return {"internal": enhanced_prompt, "external": enhanced_prompt}
     
-    def _convert_tavily_doc(self, result: dict, index: int) -> Dict[str, Any]:
-        """Tavily 결과 변환"""
-        return {
-            "id": f"external_{index}",
-            "title": result.get("title", "제목 없음"),
-            "summary": result.get("content", "")[:200] + "...",
-            "content": result.get("content", ""),
-            "source_detail": result.get("url", ""),
-            "url": result.get("url", ""),
-            "relevance_score": result.get("score", 0.5),
-            "search_type": "external"
-        }
-    
-    def _get_dummy_external_doc(self, query: str) -> Dict[str, Any]:
-        """더미 외부 문서"""
-        return {
-            "id": "dummy_external",
-            "title": f"Best Practices - {query[:20]}...",
-            "summary": f"{query[:30]}...에 대한 업계 모범사례입니다.",
-            "content": f"업계에서 {query}와 관련된 성공 사례들을 정리한 자료입니다.",
-            "source_detail": "External Reference",
-            "url": "https://example.com",
-            "relevance_score": 0.7,
-            "search_type": "dummy"
-        }
-    
-    def generate_optimized_analysis(self, enhanced_prompt: str, internal_docs: List[Dict], 
-                                  external_docs: List[Dict], original_input: str) -> Dict[str, Any]:
-        """통합 분석 결과 생성"""
-        if not self.ai_available:
-            return self._get_fallback_analysis(enhanced_prompt, internal_docs, external_docs)
-        
+    def search_external_references(self, query: str, max_results: int = 5) -> List[Dict[str, Any]]:
+        """외부 레퍼런스 검색 (Tavily 또는 더미 데이터)"""
         try:
-            internal_summary = self._summarize_docs(internal_docs, "사내 문서")
-            external_summary = self._summarize_docs(external_docs, "외부 레퍼런스")
+            if TAVILY_CONFIG.get("api_key"):
+                # Tavily API 사용 (실제 구현 시)
+                return self._search_with_tavily(query, max_results)
+            else:
+                # 더미 데이터 반환
+                return self._get_dummy_external_results(query, max_results)
+        except Exception as e:
+            st.warning(f"외부 검색 실패: {str(e)}")
+            return []
+    
+    def _search_with_tavily(self, query: str, max_results: int) -> List[Dict[str, Any]]:
+        """Tavily를 사용한 외부 검색"""
+        try:
+            # Tavily API 사용 (requests 사용)
+            import requests
+            
+            api_key = TAVILY_CONFIG.get("api_key")
+            if not api_key:
+                st.warning("Tavily API 키가 설정되지 않았습니다.")
+                return self._get_dummy_external_results(query, max_results)
+            
+            # Tavily API 요청
+            url = "https://api.tavily.com/search"
+            headers = {
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "api_key": api_key,
+                "query": query,
+                "search_depth": TAVILY_CONFIG.get("search_depth", "basic"),
+                "max_results": max_results,
+                "include_answer": True,
+                "include_raw_content": False
+            }
+            
+            response = requests.post(url, headers=headers, json=data, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                
+                # Tavily 결과를 표준 형식으로 변환
+                external_results = []
+                if "results" in result:
+                    for i, item in enumerate(result["results"][:max_results]):
+                        external_results.append({
+                            "id": f"tavily_{i}",
+                            "title": item.get("title", "제목 없음"),
+                            "content": item.get("content", "")[:500],  # 500자 제한
+                            "url": item.get("url", ""),
+                            "score": item.get("score", 0.5),
+                            "source": "Tavily Search",
+                            "source_detail": f"Tavily - {item.get('url', '')}",
+                            "search_type": "external_web"
+                        })
+                
+                st.info(f"✅ Tavily로 {len(external_results)}개의 외부 자료를 찾았습니다.")
+                return external_results
+            else:
+                st.warning(f"Tavily API 요청 실패: {response.status_code}")
+                return self._get_dummy_external_results(query, max_results)
+                
+        except Exception as e:
+            st.warning(f"Tavily 검색 중 오류: {str(e)}")
+            return self._get_dummy_external_results(query, max_results)
+    
+    def _get_dummy_external_results(self, query: str, max_results: int) -> List[Dict[str, Any]]:
+        """더미 외부 검색 결과 (Tavily API 없을 때)"""
+        import random
+        
+        # 더 다양하고 현실적인 더미 데이터
+        dummy_templates = [
+            {
+                "source": "Wikipedia",
+                "title_format": "{query} - 위키백과",
+                "content_format": "{query}에 대한 백과사전적 정보입니다. 역사적 배경, 정의, 특징 등을 포함한 종합적인 개요를 제공합니다. 이는 검증된 정보원에서 수집된 신뢰할 수 있는 내용입니다.",
+                "url_format": "https://ko.wikipedia.org/wiki/{query}"
+            },
+            {
+                "source": "Stack Overflow",
+                "title_format": "{query} 구현 방법 - 개발자 커뮤니티",
+                "content_format": "{query}와 관련된 실제 개발 경험과 해결책을 공유하는 개발자들의 토론입니다. 코드 예제, 모범 사례, 일반적인 문제와 해결방법을 포함합니다.",
+                "url_format": "https://stackoverflow.com/questions/tagged/{query}"
+            },
+            {
+                "source": "Medium",
+                "title_format": "{query} 트렌드 분석 - 전문가 블로그",
+                "content_format": "{query}에 대한 최신 트렌드와 전문가 의견을 제공하는 기술 블로그입니다. 실무 경험을 바탕으로 한 인사이트와 향후 전망을 다룹니다.",
+                "url_format": "https://medium.com/topic/{query}"
+            },
+            {
+                "source": "GitHub",
+                "title_format": "{query} 오픈소스 프로젝트",
+                "content_format": "{query}와 관련된 오픈소스 프로젝트 및 코드 저장소입니다. 실제 구현 예제, 라이브러리, 도구 등을 포함하여 개발에 직접 활용할 수 있는 자료입니다.",
+                "url_format": "https://github.com/topics/{query}"
+            },
+            {
+                "source": "Academic Paper",
+                "title_format": "{query} 연구 논문 - 학술 자료",
+                "content_format": "{query}에 대한 학술적 연구 결과입니다. 체계적인 연구 방법론과 실증적 데이터를 바탕으로 한 전문적인 분석과 결론을 제공합니다.",
+                "url_format": "https://scholar.google.com/scholar?q={query}"
+            }
+        ]
+        
+        results = []
+        for i in range(min(max_results, len(dummy_templates))):
+            template = dummy_templates[i]
+            results.append({
+                "id": f"dummy_ext_{i+1}",
+                "title": template["title_format"].format(query=query),
+                "content": template["content_format"].format(query=query),
+                "url": template["url_format"].format(query=query.replace(" ", "-")),
+                "score": 0.9 - (i * 0.15),
+                "source": template["source"],
+                "source_detail": f"{template['source']} (데모 데이터)",
+                "search_type": "external_demo"
+            })
+        
+        st.info(f"🔄 데모 모드: {len(results)}개의 더미 외부 자료 생성 (실제 환경에서는 Tavily API 사용)")
+        return results
+    
+    def generate_comprehensive_analysis(self, query: str, internal_docs: List[Dict], external_docs: List[Dict], document_content: str = "") -> str:
+        """종합 분석 결과 생성 - 문서 내용 포함"""
+        if not self.client:
+            return self._get_dummy_analysis(query, internal_docs, external_docs, document_content)
+            
+        try:
+            # 분석할 문서 내용과 참고 자료를 포함한 완전한 컨텍스트 생성
+            context = self._build_comprehensive_context(query, document_content, internal_docs, external_docs)
             
             response = self.client.chat.completions.create(
                 model=AI_CONFIG["deployment_name"],
                 messages=[
-                    {"role": "system", "content": "전문 분석가로서 사내 문서와 외부 레퍼런스를 종합하여 실용적인 분석 결과를 제공하세요."},
-                    {"role": "user", "content": f"""
-분석 요청: {original_input}
-최적화된 범위: {enhanced_prompt}
-
-사내 문서: {internal_summary}
-외부 레퍼런스: {external_summary}
-
-위 정보를 바탕으로 종합 분석 결과를 제공해주세요.
-"""}
+                    {"role": "system", "content": "주어진 문서 내용을 분석하고, 사내 문서와 외부 자료를 참고하여 포괄적이고 실용적인 분석 결과를 제공하세요."},
+                    {"role": "user", "content": context}
                 ],
                 max_tokens=1500,
                 temperature=0.7
             )
+            return response.choices[0].message.content
             
-            return {
-                "title": "🎯 AI 종합 분석 결과",
-                "content": response.choices[0].message.content,
-                "internal_docs_count": len(internal_docs),
-                "external_docs_count": len(external_docs),
-                "confidence": 0.9,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
         except Exception as e:
-            print(f"분석 생성 실패: {e}")
-            return self._get_fallback_analysis(enhanced_prompt, internal_docs, external_docs)
+            st.warning(f"종합 분석 생성 실패: {str(e)}")
+            return self._get_dummy_analysis(query, internal_docs, external_docs, document_content)
     
-    def _summarize_docs(self, docs: List[Dict], doc_type: str) -> str:
-        """문서 요약"""
-        if not docs:
-            return f"{doc_type}: 관련 자료 없음"
+    def _build_comprehensive_context(self, query: str, document_content: str, internal_docs: List[Dict], external_docs: List[Dict]) -> str:
+        """포괄적인 분석용 컨텍스트 구성"""
+        context = f"사용자 요청: {query}\n\n"
         
-        summaries = []
-        for doc in docs[:3]:
-            title = doc.get("title", "제목 없음")
-            summary = doc.get("summary", "")[:100]
-            summaries.append(f"- {title}: {summary}")
+        # 분석 대상 문서 내용 (가장 중요!)
+        if document_content and document_content.strip():
+            context += f"===== 분석 대상 문서 내용 =====\n{document_content}\n\n"
+        else:
+            context += "===== 분석 대상 문서 내용 =====\n(문서 내용이 제공되지 않음)\n\n"
         
-        return f"{doc_type} ({len(docs)}개):\n" + "\n".join(summaries)
+        # 사내 참고 문서
+        if internal_docs:
+            context += "===== 사내 참고 문서 =====\n"
+            for i, doc in enumerate(internal_docs[:3], 1):
+                title = doc.get('title', 'N/A')
+                content = doc.get('content', '')[:300]  # 300자까지
+                context += f"{i}. {title}\n{content}...\n\n"
+        
+        # 외부 참고 자료
+        if external_docs:
+            context += "===== 외부 참고 자료 =====\n"
+            for i, doc in enumerate(external_docs[:3], 1):
+                title = doc.get('title', 'N/A')
+                content = doc.get('content', '')[:300]  # 300자까지
+                context += f"{i}. {title}\n{content}...\n\n"
+        
+        context += "위의 문서 내용을 중심으로 분석하되, 참고 자료들을 활용하여 포괄적인 분석 결과를 제공해주세요."
+        return context
+
+    def _build_analysis_context(self, internal_docs: List[Dict], external_docs: List[Dict]) -> str:
+        """기존 분석용 컨텍스트 구성 (하위 호환성)"""
+        context = ""
+        
+        if internal_docs:
+            context += "**사내 문서:**\n"
+            for doc in internal_docs[:3]:  # 최대 3개만
+                context += f"- {doc.get('title', 'N/A')}: {doc.get('content', '')[:200]}...\n"
+        
+        if external_docs:
+            context += "\n**외부 자료:**\n"
+            for doc in external_docs[:3]:  # 최대 3개만
+                context += f"- {doc.get('title', 'N/A')}: {doc.get('content', '')[:200]}...\n"
+        
+        return context
     
-    def _get_fallback_analysis(self, prompt: str, internal_docs: List[Dict], external_docs: List[Dict]) -> Dict[str, Any]:
-        """폴백 분석 결과"""
-        return {
-            "title": "📋 기본 분석 결과",
-            "content": f"""
-## 📋 분석 결과
-
-### 🎯 분석 요청
-{prompt[:200]}...
-
-### 📊 검색 결과
-- 사내 문서: {len(internal_docs)}개
-- 외부 레퍼런스: {len(external_docs)}개
-
-### 💡 기본 분석
-검색된 자료를 바탕으로 추가 분석이 필요합니다.
-
-### 🔍 참고 자료
-""" + "\n".join([f"- {doc.get('title', 'N/A')}" for doc in (internal_docs + external_docs)[:5]]),
-            "internal_docs_count": len(internal_docs),
-            "external_docs_count": len(external_docs),
-            "confidence": 0.5,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-    
-    def refine_text(self, text: str, style: str = "clear") -> str:
-        """텍스트 다듬기"""
-        if not self.ai_available:
-            return f"[{style} 스타일로 개선] {text}"
+    def _get_dummy_analysis(self, query: str, internal_docs: List[Dict], external_docs: List[Dict], document_content: str = "") -> str:
+        """더미 분석 결과 - 문서 내용 포함"""
+        doc_info = ""
+        if document_content and document_content.strip():
+            word_count = len(document_content.split())
+            char_count = len(document_content)
+            doc_info = f"\n\n**📄 분석된 문서 정보:**\n- 글자수: {char_count:,}자\n- 단어수: {word_count:,}단어\n- 문서 미리보기: {document_content[:200]}..."
         
-        style_prompts = {
-            "clear": "명확하고 이해하기 쉽게",
-            "professional": "전문적이고 정확하게", 
-            "concise": "간결하고 핵심적으로"
-        }
+        return f"""
+## 📋 AI 분석 결과
+
+**사용자 요청:** {query}{doc_info}
+
+### 🔍 종합 분석
+사내 문서 {len(internal_docs)}개와 외부 자료 {len(external_docs)}개를 참고하여 분석한 결과입니다.
+
+### 💡 주요 인사이트
+1. **핵심 포인트**: {query}와 관련하여 다음과 같은 중요한 점들이 발견되었습니다.
+2. **사내 관점**: 우리 조직의 문서들에서는 이러한 접근 방식을 제시하고 있습니다.
+3. **업계 동향**: 외부 자료들은 최신 트렌드와 모범 사례를 보여줍니다.
+
+### 🎯 결론 및 권장사항
+분석된 자료들을 종합하면, 다음과 같은 방향으로 진행하는 것이 좋겠습니다.
+
+*(실제 AI 분석 결과는 OpenAI API 연결 후 제공됩니다)*
+        """.strip()
+    
+    def test_ai_connection(self) -> Dict[str, Any]:
+        """AI 서비스 연결 테스트"""
+        if not self.client:
+            return {"available": False, "error": "OpenAI 클라이언트 초기화 실패"}
         
         try:
+            # 간단한 테스트 요청
             response = self.client.chat.completions.create(
                 model=AI_CONFIG["deployment_name"],
-                messages=[
-                    {"role": "system", "content": f"다음 텍스트를 {style_prompts.get(style, '더 좋게')} 다듬어주세요."},
-                    {"role": "user", "content": text}
-                ],
-                max_tokens=500,
-                temperature=0.3
+                messages=[{"role": "user", "content": "Hello"}],
+                max_tokens=10
             )
-            return response.choices[0].message.content.strip()
+            return {"available": True, "model": AI_CONFIG["deployment_name"]}
         except Exception as e:
-            return f"[다듬기 실패] {text}"
-    
-    def structure_content(self, text: str, structure_type: str = "outline") -> str:
-        """내용 구조화"""
-        if not self.ai_available:
-            return self._get_dummy_structure(text, structure_type)
-        
-        structure_prompts = {
-            "outline": "목차와 소제목이 있는 개요 형식으로",
-            "steps": "단계별 가이드 형식으로",
-            "qa": "질문과 답변 형식으로"
-        }
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=AI_CONFIG["deployment_name"],
-                messages=[
-                    {"role": "system", "content": f"다음 내용을 {structure_prompts.get(structure_type, '체계적으로')} 구조화해주세요."},
-                    {"role": "user", "content": text}
-                ],
-                max_tokens=800,
-                temperature=0.4
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            return self._get_dummy_structure(text, structure_type)
-    
-    def get_ai_response(self, prompt: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
-        """일반적인 AI 응답 생성 (누락된 메서드 추가)"""
-        if not self.ai_available:
-            return f"[AI 응답 생성 불가] 요청: {prompt[:100]}..."
-        
-        try:
-            response = self.client.chat.completions.create(
-                model=AI_CONFIG["deployment_name"],
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=temperature
-            )
-            return response.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"AI 응답 생성 실패: {e}")
-            return f"[AI 응답 실패] 요청에 대한 응답을 생성할 수 없습니다. 오류: {str(e)}"
-    
-    def _get_dummy_structure(self, text: str, structure_type: str) -> str:
-        """더미 구조화 결과"""
-        preview = text[:100] + "..." if len(text) > 100 else text
-        
-        if structure_type == "outline":
-            return f"""# 주제 개요
-
-## 1. 주요 내용
-{preview}
-
-## 2. 핵심 포인트
-- 포인트 1
-- 포인트 2
-
-## 3. 결론
-요약 정리"""
-        elif structure_type == "steps":
-            return f"""# 단계별 가이드
-
-**1단계:** {preview}
-**2단계:** 세부 실행
-**3단계:** 완료 및 검료"""
-        else:  # qa
-            return f"""# Q&A 형식
-
-**Q: 핵심은 무엇인가?**
-A: {preview}
-
-**Q: 어떻게 진행하나?**
-A: 단계적 접근이 필요합니다."""
+            return {"available": False, "error": str(e)}

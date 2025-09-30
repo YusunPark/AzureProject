@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import Dict, List, Any
 
 # 필요한 서비스들 import
-from utils.ai_service import AIService
 from services.document_management_service import DocumentManagementService
+from services.ai_analysis_orchestrator import AIAnalysisOrchestrator
 from ui.document_upload import render_document_upload_page
 from ui.generated_documents import render_generated_documents_page
 
@@ -384,117 +384,159 @@ def render_recent_activity():
                 st.session_state.current_view = "create"
                 st.rerun()
 
-# 강화된 AI 분석 프로세스 실행
-def run_enhanced_analysis_process(user_input: str):
+# 새로운 4단계 AI 분석 프로세스 실행
+def run_new_ai_analysis_process(user_input: str, mode: str = "full", selection: str = None):
     """
-    개선된 동기적 3단계 AI 분석 프로세스 (API 호출 최적화)
-    1. 프롬프트 재생성 (사용자 의도 파악)
-    2. 병렬 검색 (사내 문서 + 외부 레퍼런스)
-    3. 통합 분석 결과 생성 (단일 API 호출)
+    새로운 4단계 AI 분석 프로세스
+    1. 프롬프트 고도화
+    2. 검색 쿼리 생성
+    3. 사내/외부 레퍼런스 병렬 검색
+    4. 최종 분석 결과 생성
     """
     
-    # 중복 실행 방지 - 동일한 입력에 대해서는 캐시된 결과 사용
-    input_hash = str(hash(user_input))
+    # 중복 실행 방지
+    input_hash = str(hash(user_input + str(selection)))
     if st.session_state.get('last_analysis_hash') == input_hash:
         st.info("이미 분석된 내용입니다. 기존 결과를 표시합니다.")
         return
     
     try:
         st.session_state.last_analysis_hash = input_hash
-        # 전체 진행 상황 표시
-        progress_bar = st.progress(0)
-        status_text = st.empty()
         
-        # AI 서비스 초기화
-        status_text.text("🔧 AI 서비스 초기화 중...")
-        ai_service = AIService()
-        progress_bar.progress(10)
+        # AI 분석 오케스트레이터 초기화
+        orchestrator = AIAnalysisOrchestrator(mode=mode)
         
-        # 1단계: 사용자 의도 파악 및 프롬프트 재생성
-        st.markdown("### 🔄 1단계: 사용자 의도 분석 및 프롬프트 최적화")
-        status_text.text("🧠 사용자 의도 분석 중...")
-        
-        with st.spinner("사용자 의도를 분석하고 AI가 더 잘 이해할 수 있도록 프롬프트를 재생성하고 있습니다..."):
-            enhanced_prompt = ai_service.enhance_user_prompt(user_input)
-            st.session_state.enhanced_prompt = enhanced_prompt
-        
-        progress_bar.progress(30)
-        st.success("✅ 1단계 완료: 프롬프트 재생성")
-        
-        with st.expander("🔍 재생성된 프롬프트 확인"):
-            st.markdown(f"**원본 입력:**\n{user_input}")
-            st.markdown(f"**AI 최적화 프롬프트:**\n{enhanced_prompt}")
-        
-        # 2단계: 순차적 검색 수행 (동기적 실행)
-        st.markdown("### 🔄 2단계: 다중 소스 검색")
-        
-        # 2-1단계: 사내 문서 RAG 검색
-        st.markdown("#### 📁 2-1. 사내 문서 검색 (Azure AI Search)")
-        status_text.text("📚 사내 문서 검색 중...")
-        
-        doc_manager = st.session_state.doc_manager
-        
-        with st.spinner("사내 문서 데이터베이스에서 관련 자료를 검색하고 있습니다..."):
-            # 사내 문서 검색 (통합 검색 서비스 사용)
-            internal_docs = doc_manager.search_training_documents(enhanced_prompt, top=5)
-            st.session_state.internal_search_results = internal_docs
-        
-        progress_bar.progress(50)
-        st.success(f"✅ 2-1단계 완료: 사내 문서 {len(internal_docs)}개 발견")
-        
-        # 2-2단계: 사외 인터넷 검색
-        st.markdown("#### 🌐 2-2. 외부 레퍼런스 검색 (Tavily)")
-        status_text.text("🌍 외부 레퍼런스 검색 중...")
-        
-        with st.spinner("인터넷에서 유사 사례와 레퍼런스를 검색하고 있습니다..."):
-            external_docs = ai_service.search_external_references(enhanced_prompt)
-            st.session_state.external_search_results = external_docs
-        
-        progress_bar.progress(70)
-        st.success(f"✅ 2-2단계 완료: 외부 참조 {len(external_docs)}개 발견")
-        
-        # 3단계: 통합 분석 결과 생성 (단일 API 호출로 최적화)
-        st.markdown("### 🔄 3단계: 통합 분석 결과 생성")
-        status_text.text("🤖 AI 분석 결과 생성 중...")
-        
-        with st.spinner("검색 결과를 바탕으로 통합 분석 결과를 생성하고 있습니다..."):
-            # 기존 4번의 API 호출을 1번으로 최적화
-            analysis_result = ai_service.generate_optimized_analysis(
-                enhanced_prompt, 
-                convert_docs_for_ai(internal_docs), 
-                external_docs,
-                user_input
-            )
-            st.session_state.analysis_result = analysis_result
-        
-        progress_bar.progress(100)
-        status_text.text("✅ 모든 단계 완료!")
-        
-        st.success("✅ 3단계 완료: 통합 분석 결과 생성")
-        
-        # 결과 표시
-        st.markdown("#### 🎯 AI 분석 결과")
-        st.markdown(analysis_result.get('content', '분석 결과를 생성하지 못했습니다.'))
-        
-        # 검색 결과 요약 표시
-        if internal_docs or external_docs:
-            with st.expander("📊 검색 결과 요약"):
-                col1, col2 = st.columns(2)
+        # 진행 상황 표시
+        progress_container = st.container()
+        with progress_container:
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # 각 단계별 실행
+            st.markdown("### 🔄 AI 분석 4단계 프로세스")
+            
+            # 1단계: 프롬프트 고도화
+            st.markdown("#### 🔄 1단계: 프롬프트 고도화")
+            status_text.text("🧠 사용자 입력을 AI가 더 잘 이해할 수 있도록 개선 중...")
+            
+            enhanced_prompt = orchestrator._refine_prompt(user_input, selection)
+            progress_bar.progress(25)
+            st.success("✅ 1단계 완료: 프롬프트 고도화")
+            
+            with st.expander("🔍 고도화된 프롬프트 확인"):
+                st.markdown(f"**원본 입력:**\n{user_input}")
+                if selection:
+                    st.markdown(f"**선택된 텍스트:**\n{selection}")
+                st.markdown(f"**AI 고도화 프롬프트:**\n{enhanced_prompt}")
+            
+            # 2단계: 검색 쿼리 생성
+            st.markdown("#### � 2단계: 검색 쿼리 생성")
+            status_text.text("� 사내/외부 검색에 최적화된 쿼리 생성 중...")
+            
+            internal_query, external_query = orchestrator._generate_queries(enhanced_prompt)
+            progress_bar.progress(40)
+            st.success("✅ 2단계 완료: 검색 쿼리 생성")
+            
+            with st.expander("🔍 생성된 검색 쿼리 확인"):
+                st.markdown(f"**사내 문서 검색 쿼리:**\n{internal_query}")
+                st.markdown(f"**외부 자료 검색 쿼리:**\n{external_query}")
+            
+            # 3단계: 병렬 검색
+            st.markdown("#### 🔄 3단계: 사내/외부 레퍼런스 병렬 검색")
+            status_text.text("📚 사내 문서 및 외부 자료를 동시 검색 중...")
+            
+            internal_refs, external_refs = orchestrator._parallel_reference_search(internal_query, external_query)
+            progress_bar.progress(70)
+            st.success(f"✅ 3단계 완료: 사내 문서 {len(internal_refs)}개, 외부 자료 {len(external_refs)}개 발견")
+            
+            # 검색 결과 미리보기
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**📁 사내 문서 결과**")
+                for i, doc in enumerate(internal_refs[:3], 1):
+                    st.markdown(f"{i}. {doc.get('title', 'N/A')}")
+                    
+            with col2:
+                st.markdown("**🌐 외부 자료 결과**")
+                for i, doc in enumerate(external_refs[:3], 1):
+                    st.markdown(f"{i}. {doc.get('title', 'N/A')}")
+            
+            # 4단계: 최종 분석 결과 생성
+            st.markdown("#### 🔄 4단계: 최종 분석 결과 생성")
+            status_text.text("🤖 모든 정보를 종합하여 최종 AI 분석 결과 생성 중...")
+            
+            final_result = orchestrator._generate_final_result(enhanced_prompt, internal_refs, external_refs)
+            progress_bar.progress(100)
+            status_text.text("✅ 모든 단계 완료!")
+            st.success("✅ 4단계 완료: 최종 분석 결과 생성")
+            
+            # 최종 결과 표시
+            st.markdown("---")
+            st.markdown("### 🎯 최종 AI 분석 결과")
+            st.markdown(final_result)
+            
+            # 레퍼런스 상세 보기
+            st.session_state.ai_analysis_references = {"internal": internal_refs, "external": external_refs}
+            st.session_state.ai_analysis_result = final_result
+            
+            # 📖 전체 분석 결과 보기 버튼
+            if st.button("📖 전체 분석 결과 보기", use_container_width=True, type="secondary"):
+                popup_key = f"popup_content_analysis_{int(time.time())}"
+                st.session_state[popup_key] = {
+                    "title": "AI 분석 전체 결과",
+                    "content": final_result,
+                    "show": True
+                }
+                st.rerun()
+            
+            # 레퍼런스 관리
+            with st.expander("� 레퍼런스 상세 보기"):
+                tab1, tab2 = st.tabs(["📁 사내 문서", "🌐 외부 자료"])
                 
-                with col1:
-                    st.markdown("**📁 사내 문서 결과**")
-                    for i, doc in enumerate(internal_docs[:3], 1):
-                        st.markdown(f"{i}. {doc.get('title', 'N/A')}")
+                with tab1:
+                    if internal_refs:
+                        for i, ref in enumerate(internal_refs, 1):
+                            with st.container():
+                                st.markdown(f"**{i}. {ref.get('title', '제목없음')}**")
+                                st.caption(f"점수: {ref.get('score', 0):.2f} | 출처: 사내문서")
+                                if ref.get('url'):
+                                    st.markdown(f"🔗 [링크]({ref.get('url')})")
+                                st.markdown(f"{ref.get('content', '')[:200]}...")
+                                st.markdown("---")
+                    else:
+                        st.info("사내 문서 검색 결과가 없습니다.")
                 
-                with col2:
-                    st.markdown("**🌐 외부 레퍼런스**")
-                    for i, doc in enumerate(external_docs[:3], 1):
-                        st.markdown(f"{i}. {doc.get('title', 'N/A')}")
+                with tab2:
+                    if external_refs:
+                        for i, ref in enumerate(external_refs, 1):
+                            with st.container():
+                                st.markdown(f"**{i}. {ref.get('title', '제목없음')}**")
+                                st.caption(f"점수: {ref.get('score', 0):.2f} | 출처: 외부자료")
+                                if ref.get('url'):
+                                    st.markdown(f"🔗 [링크]({ref.get('url')})")
+                                st.markdown(f"{ref.get('content', '')[:200]}...")
+                                st.markdown("---")
+                    else:
+                        st.info("외부 자료 검색 결과가 없습니다.")
+            
+            # 문서 삽입 기능
+            if st.button("📄 분석 결과를 문서에 삽입", use_container_width=True, type="primary"):
+                if 'document_content' in st.session_state:
+                    current_content = st.session_state.document_content
+                    insert_content = f"\n\n## AI 분석 결과\n\n{final_result}\n\n"
+                    st.session_state.document_content = current_content + insert_content
+                    st.success("✅ 분석 결과가 문서에 삽입되었습니다!")
+                    st.rerun()
+                else:
+                    st.warning("문서 편집기가 활성화되어 있지 않습니다.")
             
     except Exception as e:
-        st.error(f"분석 프로세스 중 오류 발생: {str(e)}")
-        progress_bar.progress(0)
-        status_text.text("❌ 오류 발생")
+        st.error(f"❌ 분석 프로세스 중 치명적 오류: {str(e)}")
+        if 'progress_bar' in locals():
+            progress_bar.progress(0)
+        if 'status_text' in locals():
+            status_text.text("❌ 오류 발생")
+        st.exception(e)
 
 def convert_docs_for_ai(docs: List[Dict]) -> List[Dict]:
     """문서 관리 서비스의 문서 형식을 AI 서비스 형식으로 변환"""
@@ -536,12 +578,17 @@ def render_ai_sidebar():
         if st.session_state.get('analysis_state') != 'analyzing':
             st.session_state.analysis_state = 'analyzing'
             
-            # 실제 AI 분석 프로세스 실행
+            # 새로운 4단계 AI 분석 프로세스 실행
             search_query = st.session_state.selected_text if search_mode == "선택된 텍스트 기반" else st.session_state.document_content
             
             if search_query and search_query.strip():
-                st.success("✅ 분석을 시작합니다...")
-                run_enhanced_analysis_process(search_query.strip())
+                st.success("✅ 새로운 4단계 AI 분석을 시작합니다...")
+                
+                # 모드 결정
+                analysis_mode = "selection" if search_mode == "선택된 텍스트 기반" else "full"
+                selection_text = st.session_state.selected_text if search_mode == "선택된 텍스트 기반" else None
+                
+                run_new_ai_analysis_process(search_query.strip(), mode=analysis_mode, selection=selection_text)
             else:
                 st.error("❌ 분석할 내용이 없습니다. 문서에 내용을 입력하거나 텍스트를 선택해주세요.")
             
@@ -836,6 +883,32 @@ def main():
             # AI 패널이 닫힌 경우 전체 화면 사용
             from ui.document_creation import render_document_creation
             render_document_creation()
+        
+        # 팝업은 전체 화면에서 렌더링 (AI 패널과 독립적)
+        # 간단한 팝업 시스템 - rerun 없이 동작
+        popup_keys = [key for key in st.session_state.keys() if key.startswith('popup_content_')]
+        for key in popup_keys:
+            popup_data = st.session_state.get(key)
+            if popup_data and popup_data.get('show', True):  # show가 없거나 True인 경우에만 표시
+                with st.expander(f"📋 {popup_data['title']} - 전체 내용", expanded=True):
+                    content = popup_data['content']
+                    
+                    if isinstance(content, dict):
+                        if content.get('title'):
+                            st.markdown(f"**📄 제목:** {content.get('title')}")
+                        if content.get('summary'):
+                            st.markdown("**📋 요약:**")
+                            st.markdown(content.get('summary', ''))
+                            st.markdown("---")
+                        if content.get('content'):
+                            st.markdown("**📖 전체 내용:**")
+                            st.markdown(content.get('content', ''))
+                    else:
+                        st.markdown(content)
+                    
+                    # 닫기 버튼 - rerun 대신 상태만 변경
+                    if st.button("❌ 닫기", key=f"close_{key}"):
+                        st.session_state[key]['show'] = False  # show를 False로만 변경
                 
     elif st.session_state.main_view == "document_manage":
         render_generated_documents_page(st.session_state.doc_manager)

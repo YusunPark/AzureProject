@@ -4,7 +4,14 @@
 import streamlit as st
 import time
 from state.session_state import session_state
+from core.session_manager import session_manager
+from core.constants import UIConstants, MessageConstants
+from core.utils import show_message, get_text_stats
 from datetime import datetime
+
+def render_document_creation_page():
+    """개선된 문서 생성 인터페이스 렌더링"""
+    render_document_creation()
 
 def render_document_creation():
     """개선된 문서 생성 인터페이스 렌더링"""
@@ -27,54 +34,48 @@ def render_document_creation():
     # AI 분석 버튼들 (메인 기능) - 상단으로 이동
     st.markdown("### 🤖 AI 분석 기능")
     
-    # AI 패널이 열려있지 않을 때만 버튼들 표시
+    # AI 패널이 열려있지 않을 때만 분석 버튼들 표시
     if not st.session_state.get('ai_panel_open', False):
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
+            # 전체 문서 분석 버튼
+            full_doc_content = st.session_state.get('document_content', '')
+            full_doc_words = len(full_doc_content.split()) if full_doc_content else 0
+            
             if st.button(
-                "📄 전체분석하기", 
+                f"📄 전체분석하기\n({full_doc_words:,}단어)", 
                 type="primary", 
                 use_container_width=True,
-                help="문서 전체 내용을 기반으로 AI 분석을 수행합니다"
+                help=f"현재 문서 전체 내용을 분석합니다 (글자수: {len(full_doc_content):,}자)"
             ):
-                # 현재 문서 내용 가져오기 (아래에서 정의되기 전에 세션에서 가져옴)
-                current_content = st.session_state.get('document_content', '')
-                if current_content and current_content.strip():
-                    _start_full_analysis(current_content.strip())
+                if full_doc_content and full_doc_content.strip():
+                    _start_full_analysis(full_doc_content.strip())
                 else:
-                    st.warning("⚠️ 먼저 아래 문서 내용을 입력해주세요.")
+                    st.warning("⚠️ 먼저 아래 '문서 내용' 영역에 내용을 입력해주세요.")
         
         with col2:
+            # 선택 텍스트 분석 버튼
+            selected_content = st.session_state.get('selected_text', '')
+            selected_words = len(selected_content.split()) if selected_content else 0
+            
             if st.button(
-                "🎯 선택내용 분석하기", 
+                f"🎯 선택내용 분석하기\n({selected_words:,}단어)", 
                 type="secondary", 
                 use_container_width=True,
-                help="선택된 텍스트만을 대상으로 AI 분석을 수행합니다"
+                help=f"선택된 텍스트만 분석합니다 (글자수: {len(selected_content):,}자)"
             ):
-                # 현재 선택된 텍스트 가져오기
-                current_selected = st.session_state.get('selected_text', '')
-                if current_selected and current_selected.strip():
-                    _start_selected_analysis(current_selected.strip())
+                if selected_content and selected_content.strip():
+                    _start_selected_analysis(selected_content.strip())
                 else:
-                    st.warning("⚠️ 먼저 아래 선택 영역에 분석할 텍스트를 입력해주세요.")
-        
-        with col3:
-            if st.button(
-                "⚙️ 고급 분석 설정",
-                use_container_width=True,
-                help="상세한 분석 옵션을 설정할 수 있습니다"
-            ):
-                st.session_state.ai_panel_open = True
-                st.session_state.analysis_mode = "manual"
-                st.rerun()
+                    st.warning("⚠️ 먼저 아래 '텍스트 선택' 영역에 분석할 내용을 입력해주세요.")
         
         # 분석 상태 정보 표시
         if st.session_state.get('analysis_in_progress', False):
-            st.info("🔄 AI 분석이 진행 중입니다...")
+            st.info("🔄 AI 분석이 진행 중입니다... 우측 사이드바를 확인하세요.")
     
     else:
-        # AI 패널이 열려있을 때는 간단한 안내만
+        # AI 패널이 열려있을 때는 간단한 안내와 닫기 버튼만
         st.info("🤖 AI 분석 패널이 활성화되어 있습니다. 우측 사이드바를 확인하세요.")
         
         if st.button("❌ AI 패널 닫기", key="close_ai_panel_main"):
@@ -84,17 +85,70 @@ def render_document_creation():
     
     # 문서 내용 입력 영역
     st.markdown("### ✍️ 문서 내용")
+    
+    # 세션 상태에서 현재 문서 내용 가져오기 - 강제 동기화
+    if 'document_content' not in st.session_state:
+        st.session_state.document_content = ''
+    
+    # 삽입이 완료된 경우 강제로 widget key를 업데이트
+    widget_key = "document_content_main_editor"
+    if st.session_state.get('force_textarea_update'):
+        widget_key = f"document_content_main_editor_{st.session_state.get('last_insert_timestamp', '')}"
+        del st.session_state.force_textarea_update
+    
+    current_content = st.session_state.document_content
+    
     document_content = st.text_area(
         "문서 내용을 입력하세요:",
-        value=st.session_state.get('document_content', ''),
+        value=current_content,
         placeholder="여기에 문서 내용을 작성하세요...",
         height=350,
-        key="document_content_main_editor"
+        key=widget_key
     )
     
     # 문서 내용이 변경되면 세션에 저장
-    if document_content != st.session_state.get('document_content', ''):
+    if document_content != current_content:
         st.session_state.document_content = document_content
+        print(f"[DEBUG] 문서 내용 업데이트: {len(document_content):,}자")
+    
+    # 디버깅 정보 - 동기화 상태 확인
+    with st.expander("🔧 텍스트 영역 디버깅", expanded=False):
+        st.write(f"- Widget Key: `{widget_key}`")
+        st.write(f"- 세션 상태 길이: {len(st.session_state.document_content):,}자")
+        st.write(f"- Widget 값 길이: {len(document_content):,}자")
+        st.write(f"- 동기화 상태: {'✅ 일치' if document_content == st.session_state.document_content else '❌ 불일치'}")
+        
+        # 강제 동기화 버튼
+        if st.button("🔄 강제 동기화"):
+            st.rerun()
+    
+    # 삽입 완료 상태 표시 (간단하게)
+    if len(document_content) != st.session_state.get('previous_content_length', 0):
+        st.session_state.previous_content_length = len(document_content)
+        
+        # 디버깅 정보 표시
+        with st.expander("🔍 삽입 확인 (디버깅)", expanded=False):
+            st.write("삽입 완료 플래그들:")
+            st.json({
+                'insert_completed': st.session_state.get('insert_completed'),
+                'insert_success_message': st.session_state.get('insert_success_message'),
+                'inserted_content_length': st.session_state.get('inserted_content_length'),
+                'last_insert_timestamp': st.session_state.get('last_insert_timestamp'),
+                'current_document_length': len(st.session_state.get('document_content', '')),
+            })
+        
+        # 삽입 완료 플래그들 정리 (한 번만 표시되도록)
+        if 'insert_completed' in st.session_state:
+            del st.session_state.insert_completed
+        if 'insert_success_message' in st.session_state:
+            del st.session_state.insert_success_message  
+        if 'inserted_content_length' in st.session_state:
+            del st.session_state.inserted_content_length
+    
+    # 삽입 오류 메시지 표시
+    if st.session_state.get('insert_error_message'):
+        st.error(st.session_state.insert_error_message)
+        del st.session_state.insert_error_message
     
     # 텍스트 선택 영역 (선택내용 분석용)
     st.markdown("### 🎯 텍스트 선택 (부분 분석용)")

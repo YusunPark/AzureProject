@@ -1,6 +1,78 @@
 """
-세션 상태 관리 - Streamlit 세션 상태의 중앙 관리
+애플리케이션 상태 관리 - 세션 상태를 중앙에서 관리 (레거시 호환성을 위한 래퍼)
 """
+import streamlit as st
+from typing import Any, Dict, Optional
+from core.session_manager import session_manager
+
+class SessionState:
+    """애플리케이션 세션 상태 관리자 (레거시 호환)"""
+    
+    def __init__(self):
+        self.manager = session_manager
+    
+    def init_all_states(self):
+        """모든 세션 상태 초기화"""
+        self.manager.initialize_all_states()
+    
+    # 문서 관련 메서드
+    def get_document_content(self) -> str:
+        """현재 문서 내용 반환"""
+        return self.manager.get_document_content()
+    
+    def set_document_content(self, content: str):
+        """문서 내용 설정"""
+        self.manager.set_document_content(content)
+    
+    def get_document_stats(self) -> Dict[str, int]:
+        """문서 통계 반환"""
+        return self.manager.get_document_stats()
+    
+    # UI 상태 관련 메서드
+    def toggle_ai_panel(self):
+        """AI 패널 토글"""
+        self.manager.toggle_ai_panel()
+    
+    def close_ai_panel(self):
+        """AI 패널 닫기"""
+        st.session_state.ai_panel_open = False
+    
+    def open_ai_panel(self):
+        """AI 패널 열기"""
+        st.session_state.ai_panel_open = True
+    
+    # 검색 및 분석 관련 메서드
+    def get_selected_text(self) -> str:
+        """선택된 텍스트 반환"""
+        return self.manager.get_selected_text()
+    
+    def set_selected_text(self, text: str):
+        """선택된 텍스트 설정"""
+        self.manager.set_selected_text(text)
+    
+    def get_analysis_results(self) -> Dict:
+        """분석 결과 반환"""
+        return st.session_state.get('ai_results', {})
+    
+    def set_analysis_results(self, results: Dict):
+        """분석 결과 설정"""
+        st.session_state.ai_results = results
+    
+    # 캐시 관련 메서드
+    def cache_data(self, key: str, data: Any, ttl: int = 300):
+        """데이터 캐시"""
+        self.manager.cache_data(key, data, ttl)
+    
+    def get_cached_data(self, key: str) -> Optional[Any]:
+        """캐시된 데이터 조회"""
+        return self.manager.get_cached_data(key)
+    
+    def clear_cache(self):
+        """모든 캐시 삭제"""
+        self.manager.clear_all_cache()
+
+# 전역 인스턴스 (레거시 호환)
+session_state = SessionState()
 import streamlit as st
 import time
 from typing import Dict, Any, Optional
