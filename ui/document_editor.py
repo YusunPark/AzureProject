@@ -157,13 +157,20 @@ def _render_main_editor(editor_height, font_size):
         "문서 내용:",
         value=st.session_state.get('document_content', ''),
         height=editor_height,
-        key="main_document_editor",
+        key="document_editor_main_content",
         help="여기에 문서 내용을 작성하세요. AI 패널을 열어 도움을 받을 수 있습니다.",
         placeholder="여기에 문서 내용을 입력하세요..."
     )
     
     # 문서 내용 실시간 업데이트
     st.session_state.document_content = document_content
+
+def _render_save_dialog(doc):
+    """저장 다이얼로그 렌더링"""
+    # 현재 문서 내용 가져오기
+    content = doc.content.strip() if hasattr(doc, 'content') and doc.content else ""
+    if not content.strip() and 'document_editor_main_content' in st.session_state:
+        content = st.session_state.document_editor_main_content
 
 def _render_save_dialog(doc):
     """저장 다이얼로그 렌더링"""

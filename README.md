@@ -1,183 +1,198 @@
-# 🤖 AI 문서 작성 어시스턴트 (리팩토링 버전)
+# AI 문서 작성 어시스턴트 - 고도화 버전
 
-Azure OpenAI와 Streamlit을 활용한 지능형 문서 작성 지원 시스템
+AI 기반의 스마트한 문서 작성, 학습, 관리 플랫폼입니다.
 
-## ✨ 주요 기능
+## 🚀 새로운 주요 기능
 
-### 🤖 핵심 AI 기능
-- **3단계 통합 분석**: 프롬프트 최적화 → 사내/외부 검색 → 종합 분석
-- **사내 문서 검색**: Azure AI Search를 통한 기업 내부 자료 검색
-- **외부 레퍼런스 검색**: Tavily API를 통한 실시간 웹 검색
-- **텍스트 다듬기**: 명확성, 전문성, 간결성 개선
-- **내용 구조화**: 목차, 단계별 가이드, Q&A 형식으로 변환
+### 📚 사내 문서 학습 시스템
+- **다중 파일 업로드**: TXT, MD, DOCX, PDF, PY, JS, HTML, CSS, JSON, CSV 지원
+- **Azure AI Search 연동**: 자동 인덱싱 및 벡터 검색
+- **키워드 추출**: AI 기반 자동 키워드 생성
+- **메타데이터 관리**: 카테고리, 부서, 태그 등 체계적 분류
 
-### � 문서 편집 기능
-- **다중 문서 타입**: 새 문서, 템플릿, 파일 불러오기
-- **실시간 통계**: 단어 수, 문자 수, 줄 수 표시
-- **편집기 커스터마이징**: 높이 조절, 폰트 크기 변경
-- **내보내기**: TXT 형식으로 다운로드
+### 📋 생성된 문서 관리
+- **Azure Storage 연동**: 안전한 클라우드 저장
+- **버전 관리**: 문서 편집 및 복사 기능
+- **검색 및 필터링**: 제목, 내용 기반 검색
+- **통계 및 분석**: 문서 현황 대시보드
 
-### 🎨 사용자 경험
-- **모듈형 UI**: 문서 생성 → 편집 → AI 분석 단계별 인터페이스
-- **토글형 AI 패널**: 필요시에만 표시되는 AI 도구
-- **진행 상황 표시**: AI 분석 과정의 실시간 피드백
-- **원클릭 삽입**: 분석 결과를 문서에 바로 적용
+### 🤖 강화된 AI 분석
+- **3단계 분석 프로세스**: 프롬프트 최적화 → 다중 검색 → 통합 분석
+- **사내 문서 기반 추천**: 학습된 문서를 활용한 맞춤형 제안
+- **외부 레퍼런스 검색**: Tavily를 통한 실시간 웹 검색
+- **다양한 분석 관점**: 여러 버전의 분석 결과 제공
 
-## 🏗️ 리팩토링된 시스템 구조
+### 🔍 통합 관리 시스템
+- **홈 대시보드**: 전체 현황 한눈에 보기
+- **서비스 상태 모니터링**: Azure 서비스 연결 상태 실시간 확인
+- **사용자 친화적 UI**: 직관적인 네비게이션 및 작업 흐름
+
+## 📊 시스템 아키텍처
 
 ```
-AzureProject/
-├── app_refactored.py        # 새로운 메인 앱 (간소화)
-├── app.py                   # 기존 메인 앱 (백업용)
-├── config.py                # 정리된 설정 관리
-├── state/                   # 상태 관리
-│   └── session_state.py     # Streamlit 세션 상태 중앙 관리
-├── ui/                      # UI 컴포넌트
-│   ├── styles.py            # CSS 스타일 정의
-│   ├── document_creation.py # 문서 생성 UI
-│   ├── document_editor.py   # 문서 편집 UI
-│   └── ai_sidebar.py        # AI 도구 사이드바
-├── services/                # 비즈니스 로직
-│   └── ai_analysis_service.py # AI 분석 프로세스 관리
-├── utils/                   # 유틸리티
-│   ├── ai_service.py        # 간소화된 AI 서비스
-│   └── ai_service_backup.py # 기존 AI 서비스 (백업)
-├── backup_old_files/        # 사용하지 않는 파일들
-└── data/                    # 데이터 파일들
-    ├── sample_documents.json
-    └── keywords.json
+Frontend (Streamlit)
+    ↓
+Document Management Service
+    ↓
+┌─────────────────┬─────────────────┐
+│  Azure Storage  │ Azure AI Search │
+│  (파일 저장)      │  (검색 인덱스)   │
+└─────────────────┴─────────────────┘
+    ↓
+Azure OpenAI (AI 분석 및 임베딩)
 ```
 
-## 🚀 설치 및 실행
+## 🛠️ 기술 스택
 
-### 1. 환경 설정
+- **Frontend**: Streamlit with Enhanced UI
+- **AI Engine**: Azure OpenAI (GPT-4o + text-embedding-3-large)
+- **Storage**: Azure Storage Account (Blob Storage)
+- **Search**: Azure AI Search (REST API)
+- **External Search**: Tavily API
+- **Monitoring**: LangSmith (Optional)
 
+## 📦 설치 및 실행
+
+### 1. 필수 패키지 설치
 ```bash
-# 저장소 클론
-git clone <repository-url>
-cd AzureProject
-
-# Python 가상환경 생성 및 활성화
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# 또는 .venv\Scripts\activate  # Windows
-
-# 의존성 설치
 pip install -r requirements.txt
 ```
 
-### 2. 환경 변수 설정
+### 2. Azure 리소스 설정
+다음 Azure 서비스들이 필요합니다:
+- Azure OpenAI Service
+- Azure Storage Account
+- Azure AI Search Service
 
-`.env` 파일을 생성하고 다음 정보를 입력하세요:
-
-```env
-# Azure OpenAI 설정
-OPENAI_ENDPOINT=https://your-endpoint.openai.azure.com/
-OPENAI_API_KEY=your_openai_api_key
-OPENAI_DEPLOYMENT_NAME=gpt-4o
-OPENAI_API_VERSION=2024-12-01-preview
-
-# Tavily 검색 API
-TAVILY_API_KEY=your_tavily_api_key
-
-# OnlyOffice 설정
-ONLYOFFICE_API_KEY=your_onlyoffice_api_key
-ONLYOFFICE_SERVER_URL=http://localhost:8000
-```
-
-### 3. 애플리케이션 실행
+### 3. 환경 변수 설정
+`.env` 파일에 다음 설정을 추가하세요:
 
 ```bash
-# 실행 스크립트 사용
-chmod +x run.sh
-./run.sh
+# Azure OpenAI
+OPENAI_ENDPOINT=https://your-openai-endpoint.openai.azure.com/
+OPENAI_API_KEY=your-api-key
+OPENAI_DEPLOYMENT_NAME=gpt-4o
+OPENAI_EMBEDDING_DEPLOYMENT_NAME=text-embedding-3-large
+OPENAI_API_VERSION=2024-12-01-preview
 
-# 또는 직접 실행
+# Azure Storage Account
+AZURE_STORAGE_ACCOUNT_NAME=your-storage-account
+AZURE_STORAGE_ACCOUNT_KEY=your-storage-key
+AZURE_STORAGE_CONTAINER_NAME=documents
+AZURE_STORAGE_BLOB_SERVICE_URL=https://your-account.blob.core.windows.net
+
+# Azure AI Search
+AZURE_SEARCH_ENDPOINT=https://your-search-service.search.windows.net
+AZURE_SEARCH_ADMIN_KEY=your-search-admin-key
+AZURE_SEARCH_API_KEY=your-search-api-key
+
+# Tavily Search (Optional)
+TAVILY_API_KEY=your-tavily-api-key
+
+# LangSmith Monitoring (Optional)
+LANGSMITH_API_KEY=your-langsmith-key
+```
+
+### 4. 애플리케이션 실행
+
+#### 기본 버전
+```bash
 streamlit run app.py
 ```
 
-브라우저에서 `http://localhost:8501` 접속
-
-## 🔧 API 키 발급 방법
-
-### Azure OpenAI
-1. [Azure Portal](https://portal.azure.com) 로그인
-2. Azure OpenAI 리소스 생성
-3. 키 및 엔드포인트 페이지에서 API 키 복사
-4. 모델 배포 (gpt-4o 권장)
-
-### Tavily Search API
-1. [Tavily 웹사이트](https://tavily.com) 회원가입
-2. API 키 발급
-3. 무료 플랜: 월 1,000회 검색 제한
-
-### OnlyOffice Document Server
-1. [OnlyOffice](https://www.onlyoffice.com) 계정 생성
-2. Document Server 설치 또는 클라우드 서비스 이용
-3. API 키 및 서버 URL 설정
-
-## 📋 사용 방법
-
-### 1. 문서 편집
-- 메인 편집 영역에서 텍스트 작성
-- OnlyOffice 편집기로 전문적인 문서 작성 가능
-
-### 2. AI 추천 활용
-- **전체 문서 분석**: 상단 "🤖 AI 추천" 버튼 클릭
-- **텍스트 선택 분석**: 텍스트 선택 후 "🎯 선택된 텍스트로 AI 추천" 버튼 클릭
-
-### 3. 분석 결과 활용
-- **문서 추천**: 관련 문서 및 참조 자료 확인
-- **문장 다듬기**: 명확성, 전문성, 간결성 개선안 확인
-- **구조화**: 목차, 단계별, Q&A 형식으로 변환
-
-### 4. 내용 삽입
-- 각 추천 결과에서 "📝 문서에 삽입" 버튼 클릭
-- 3초간 노란색 하이라이트로 삽입된 내용 확인
-
-## 🎨 UI 컬러 테마
-
-- **주 배경색**: #ffffff
-- **보조 배경색**: #f8f9fa
-- **사이드바**: #fafafa
-- **AI 액센트**: #8b5cf6 (보라색)
-- **테두리**: #e5e7eb
-- **텍스트**: #1f2937
-- **보조 텍스트**: #6b7280
-
-## 🔍 트러블슈팅
-
-### 패키지 설치 오류
+#### 고도화 버전 (권장)
 ```bash
-# 개별 설치 시도
-pip install streamlit openai python-dotenv tavily-python azure-identity python-docx
-
-# 또는 업그레이드
-pip install --upgrade pip
-pip install -r requirements.txt
+streamlit run app_enhanced.py
 ```
 
-### API 연결 오류
-- `.env` 파일의 API 키와 엔드포인트 확인
-- 네트워크 연결 상태 확인
-- API 사용량 한도 확인
+## 📖 사용 가이드
 
-### OnlyOffice 연동 오류
-- Document Server URL 접근 가능성 확인
-- CORS 설정 확인
-- JWT 토큰 설정 확인
+### 1. 사내 문서 학습
+1. **📚 사내 문서 학습** 메뉴로 이동
+2. **문서 업로드** 탭에서 파일 선택
+3. 카테고리, 부서, 태그 등 메타데이터 입력
+4. **업로드 및 학습 시작** 버튼 클릭
 
-## 🤝 기여 방법
+### 2. AI 문서 작성
+1. **📝 문서 작성** 메뉴로 이동
+2. 새 문서 생성 또는 템플릿 선택
+3. 텍스트 입력 후 AI 분석 실행
+4. AI 제안사항 검토 및 적용
+5. **저장** 버튼으로 Azure Storage에 저장
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+### 3. 문서 관리
+1. **📋 문서 관리** 메뉴로 이동
+2. 생성된 문서 목록 확인
+3. 편집, 복사, 다운로드, 삭제 등 관리 작업
+4. 통계 탭에서 현황 분석
+
+## 🔧 고급 설정
+
+### Azure AI Search 인덱스 설정
+시스템이 자동으로 `company-documents` 인덱스를 생성합니다. 필요시 수동 설정 가능:
+
+```python
+# utils/simple_azure_search.py에서 인덱스명 변경
+self.index_name = "your-custom-index-name"
+```
+
+### 파일 업로드 제한
+`config.py`에서 설정 변경 가능:
+
+```python
+APP_CONFIG = {
+    "max_upload_size": 10 * 1024 * 1024,  # 10MB
+    "supported_formats": [".docx", ".pdf", ".txt", ".md", "..."]
+}
+```
+
+## 🚀 배포
+
+### Azure App Service 배포
+```bash
+# Azure CLI를 통한 배포
+az webapp up --sku F1 --name your-app-name --resource-group your-rg
+```
+
+### Docker 배포
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 8501
+CMD ["streamlit", "run", "app_enhanced.py", "--server.port=8501", "--server.address=0.0.0.0"]
+```
+
+## 🔍 문제 해결
+
+### Azure Search 연결 오류
+- Azure AI Search 서비스가 실행 중인지 확인
+- API 키와 엔드포인트 URL 검증
+- 방화벽 설정 확인
+
+### Azure Storage 업로드 오류  
+- Storage Account 접근 권한 확인
+- 컨테이너 존재 여부 확인
+- 네트워크 연결 상태 점검
+
+### AI 분석 실패
+- Azure OpenAI 배포 상태 확인
+- API 할당량 및 요금 한도 점검
+- 모델 배포명 정확성 확인
+
+## 📝 라이선스
+
+MIT License
+
+## 🤝 기여하기
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
-
-## 📄 라이선스
-
-이 프로젝트는 MIT 라이선스하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 확인하세요.
 
 ## 📞 지원
 
@@ -185,4 +200,4 @@ pip install -r requirements.txt
 
 ---
 
-**Made with ❤️ by AI Document Assistant Team**
+**⚡ 고도화된 AI 문서 어시스턴트로 더욱 스마트한 문서 작업을 경험하세요!**

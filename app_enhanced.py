@@ -727,7 +727,7 @@ def render_document_editor():
         "문서 내용:",
         value=st.session_state.get('document_content', ''),
         height=editor_height,
-        key="main_document_editor",
+        key="app_enhanced_main_editor",
         help="여기에 문서 내용을 작성하세요. AI 패널을 열어 도움을 받을 수 있습니다.",
         placeholder="여기에 문서 내용을 입력하세요..."
     )
@@ -822,22 +822,20 @@ def main():
         render_document_upload_page(st.session_state.doc_manager)
         
     elif st.session_state.main_view == "document_create":
-        # 문서 작성 뷰
-        if st.session_state.current_view == "create":
+        # 개선된 문서 작성 뷰 - AI 패널 통합
+        if st.session_state.get('ai_panel_open', False):
+            # AI 패널이 열린 경우 2컬럼 레이아웃
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                from ui.document_creation import render_document_creation
+                render_document_creation()
+            with col2:
+                from ui.ai_sidebar import render_ai_sidebar
+                render_ai_sidebar()
+        else:
+            # AI 패널이 닫힌 경우 전체 화면 사용
+            from ui.document_creation import render_document_creation
             render_document_creation()
-        elif st.session_state.current_view == "editor":
-            # AI 패널이 열린 경우 레이아웃 조정
-            if st.session_state.ai_panel_open:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    render_document_editor()
-                with col2:
-                    render_ai_sidebar()
-                    if st.button("❌ 패널 닫기", key="close_panel"):
-                        st.session_state.ai_panel_open = False
-                        st.rerun()
-            else:
-                render_document_editor()
                 
     elif st.session_state.main_view == "document_manage":
         render_generated_documents_page(st.session_state.doc_manager)

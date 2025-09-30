@@ -69,3 +69,5 @@ Thumbs.db
 
 # Azure deployment files (keep .env.azure for reference)
 # .env.azure
+
+*.zip

@@ -365,6 +365,25 @@ class AIService:
         except Exception as e:
             return self._get_dummy_structure(text, structure_type)
     
+    def get_ai_response(self, prompt: str, max_tokens: int = 1000, temperature: float = 0.7) -> str:
+        """일반적인 AI 응답 생성 (누락된 메서드 추가)"""
+        if not self.ai_available:
+            return f"[AI 응답 생성 불가] 요청: {prompt[:100]}..."
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=AI_CONFIG["deployment_name"],
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            print(f"AI 응답 생성 실패: {e}")
+            return f"[AI 응답 실패] 요청에 대한 응답을 생성할 수 없습니다. 오류: {str(e)}"
+    
     def _get_dummy_structure(self, text: str, structure_type: str) -> str:
         """더미 구조화 결과"""
         preview = text[:100] + "..." if len(text) > 100 else text
@@ -386,7 +405,7 @@ class AIService:
 
 **1단계:** {preview}
 **2단계:** 세부 실행
-**3단계:** 완료 및 검토"""
+**3단계:** 완료 및 검료"""
         else:  # qa
             return f"""# Q&A 형식
 

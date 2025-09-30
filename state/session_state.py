@@ -21,11 +21,13 @@ class SessionState:
     def _init_ui_states(self):
         """UI 관련 상태 초기화"""
         if 'ai_panel_open' not in st.session_state:
-            st.session_state.ai_panel_open = True
+            st.session_state.ai_panel_open = False  # 기본적으로 닫힌 상태
         if 'current_view' not in st.session_state:
             st.session_state.current_view = "create"
         if 'show_file_upload' not in st.session_state:
             st.session_state.show_file_upload = False
+        if 'show_template_options' not in st.session_state:
+            st.session_state.show_template_options = False
     
     def _init_document_states(self):
         """문서 관련 상태 초기화"""
@@ -35,6 +37,8 @@ class SessionState:
             st.session_state.current_document = None
         if 'selected_text' not in st.session_state:
             st.session_state.selected_text = ""
+        if 'current_document_title' not in st.session_state:
+            st.session_state.current_document_title = ""
     
     def _init_ai_states(self):
         """AI 관련 상태 초기화"""
@@ -48,6 +52,19 @@ class SessionState:
             st.session_state.internal_search_results = []
         if 'external_search_results' not in st.session_state:
             st.session_state.external_search_results = []
+        # 새로운 개선된 분석 관련 상태들
+        if 'analysis_mode' not in st.session_state:
+            st.session_state.analysis_mode = 'manual'
+        if 'analysis_text' not in st.session_state:
+            st.session_state.analysis_text = ""
+        if 'analysis_in_progress' not in st.session_state:
+            st.session_state.analysis_in_progress = False
+        if 'analysis_completed' not in st.session_state:
+            st.session_state.analysis_completed = False
+        if 'enhanced_analysis_results' not in st.session_state:
+            st.session_state.enhanced_analysis_results = {}
+        if 'auto_start_analysis' not in st.session_state:
+            st.session_state.auto_start_analysis = False
     
     def _init_cache_states(self):
         """캐시 관련 상태 초기화"""

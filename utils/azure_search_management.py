@@ -206,9 +206,54 @@ class AzureSearchService:
                 except:
                     return f"Word 문서 처리 오류: {filename}"
             
-            elif file_ext in ['pdf']:
-                # PDF 처리는 별도 라이브러리 필요
-                return f"PDF 문서 (텍스트 추출 필요): {filename}"
+            elif file_ext == 'pdf':
+                # PDF 텍스트 추출
+                try:
+                    import io
+                    import PyPDF2
+                    
+                    # PyPDF2로 PDF 텍스트 추출 시도
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                    text_parts = []
+                    
+                    for page_num, page in enumerate(pdf_reader.pages):
+                        try:
+                            page_text = page.extract_text()
+                            if page_text.strip():
+                                text_parts.append(page_text)
+                        except Exception as e:
+                            print(f"PDF 페이지 {page_num} 추출 오류: {e}")
+                            continue
+                    
+                    extracted_text = '\n'.join(text_parts)
+                    
+                    # 추출된 텍스트가 너무 적으면 pdfplumber 시도
+                    if len(extracted_text.strip()) < 100:
+                        try:
+                            import pdfplumber
+                            
+                            with pdfplumber.open(io.BytesIO(file_content)) as pdf:
+                                plumber_text = []
+                                for page in pdf.pages:
+                                    try:
+                                        page_text = page.extract_text()
+                                        if page_text:
+                                            plumber_text.append(page_text)
+                                    except:
+                                        continue
+                                
+                                if plumber_text:
+                                    extracted_text = '\n'.join(plumber_text)
+                        except ImportError:
+                            pass  # pdfplumber가 없으면 PyPDF2 결과 사용
+                    
+                    if extracted_text.strip():
+                        return extracted_text
+                    else:
+                        return f"PDF 파일에서 텍스트를 추출할 수 없습니다: {filename}"
+                        
+                except Exception as e:
+                    return f"PDF 처리 오류 ({filename}): {str(e)}"
             
             else:
                 # 기타 파일은 바이너리로 처리
