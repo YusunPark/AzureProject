@@ -19,6 +19,7 @@ AI_CONFIG = {
     "openai_endpoint": os.getenv("OPENAI_ENDPOINT"),
     "openai_api_key": os.getenv("OPENAI_API_KEY"),
     "deployment_name": os.getenv("OPENAI_DEPLOYMENT_NAME", "gpt-4o"),
+    "embedding_deployment_name": os.getenv("OPENAI_EMBEDDING_DEPLOYMENT_NAME", "text-embedding-3-large"),
     "api_version": os.getenv("OPENAI_API_VERSION", "2024-12-01-preview"),
     "max_tokens": 1000,
     "temperature": 0.7
@@ -38,6 +39,14 @@ AZURE_SEARCH_CONFIG = {
     "api_key": os.getenv("AZURE_SEARCH_API_KEY"),
     "index_name": os.getenv("AZURE_SEARCH_INDEX_NAME", "doc-index"),
     "api_version": "2019-05-06"
+}
+
+# Azure Storage 설정
+AZURE_STORAGE_CONFIG = {
+    "account_name": os.getenv("AZURE_STORAGE_ACCOUNT_NAME"),
+    "account_key": os.getenv("AZURE_STORAGE_ACCOUNT_KEY"),
+    "container_name": os.getenv("AZURE_STORAGE_CONTAINER_NAME", "documents"),
+    "blob_service_url": os.getenv("AZURE_STORAGE_BLOB_SERVICE_URL")
 }
 
 # LangSmith 추적 설정
