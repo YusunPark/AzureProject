@@ -68,4 +68,4 @@ Thumbs.db
 .env.production
 
 # Azure deployment files (keep .env.azure for reference)
-.env.azure
+# .env.azure
