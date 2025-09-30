@@ -69,13 +69,20 @@ class AIAnalysisService:
     
     def _enhance_user_prompt(self, user_input: str) -> str:
         """1단계: 프롬프트 재생성"""
+        st.info("🧠 **1단계:** 사용자 의도를 분석하고 검색 프롬프트를 최적화합니다...")
+        
         with st.spinner("사용자 의도를 분석하고 프롬프트를 최적화하고 있습니다..."):
             enhanced_prompt = self.ai_service.enhance_user_prompt(user_input)
             st.session_state.enhanced_prompt = enhanced_prompt
             
+            # 프롬프트 최적화 완료 표시
+            st.success("✅ 프롬프트 최적화 완료!")
+            
             with st.expander("🔍 재생성된 프롬프트 확인"):
-                st.markdown(f"**원본 입력:**\n{user_input}")
-                st.markdown(f"**AI 최적화 프롬프트:**\n{enhanced_prompt}")
+                st.markdown(f"**📝 원본 입력:**\n{user_input}")
+                st.markdown(f"**🤖 AI 최적화 프롬프트:**\n{enhanced_prompt}")
+                if len(enhanced_prompt) > len(user_input):
+                    st.caption("✨ 프롬프트가 더 구체적이고 검색에 최적화되었습니다!")
             
             return enhanced_prompt
     

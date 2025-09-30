@@ -12,6 +12,12 @@ def render_ai_sidebar():
     
     st.markdown("## 🤖 AI 문서 어시스턴트")
     
+    # 삽입 성공 메시지 표시 (이전 세션에서 설정된 경우)
+    if st.session_state.get('insert_success_message'):
+        st.info(st.session_state.insert_success_message)
+        # 메시지 표시 후 클리어 (다음 렌더링에서는 보이지 않음)
+        del st.session_state.insert_success_message
+    
     # 검색 모드 선택
     search_mode = st.radio(
         "검색 모드 선택:",
@@ -19,10 +25,10 @@ def render_ai_sidebar():
         key="search_mode"
     )
     
-    # 선택된 텍스트 표시
-    if search_mode == "선택된 텍스트 기반" and st.session_state.selected_text:
-        st.markdown("**선택된 텍스트:**")
-        st.markdown(f"```\n{st.session_state.selected_text}\n```")
+    # 선택된 텍스트 기반일 때 텍스트 선택 인터페이스 표시
+    if search_mode == "선택된 텍스트 기반":
+        from ui.text_selection import create_text_selection_input
+        create_text_selection_input()
     
     # AI 분석 시작 버튼
     if st.button("🚀 AI 분석 시작"):
@@ -39,27 +45,31 @@ def render_ai_sidebar():
 
 def _handle_ai_analysis_start(search_mode):
     """AI 분석 시작 처리"""
-    if st.session_state.get('analysis_state') != 'analyzing':
-        st.session_state.analysis_state = 'analyzing'
-        
-        # 분석 쿼리 결정
-        if search_mode == "선택된 텍스트 기반":
-            search_query = st.session_state.selected_text
-        else:
-            search_query = st.session_state.document_content
-        
-        # 디버깅 정보 표시
-        _show_debug_info(search_mode, search_query)
-        
-        if search_query and search_query.strip():
-            st.success("✅ 분석을 시작합니다...")
-            analysis_service = AIAnalysisService()
-            analysis_service.run_enhanced_analysis_process(search_query.strip())
-        else:
-            st.error("❌ 분석할 내용이 없습니다. 문서에 내용을 입력하거나 텍스트를 선택해주세요.")
-            _render_test_analysis_button()
-        
+    # 분석 상태 초기화 및 기존 결과 클리어
+    st.session_state.analysis_state = 'analyzing'
+    st.session_state.enhanced_prompt = None
+    st.session_state.internal_search_results = []
+    st.session_state.external_search_results = []
+    st.session_state.analysis_result = None
+    
+    # 분석 쿼리 결정
+    if search_mode == "선택된 텍스트 기반":
+        search_query = st.session_state.selected_text
+    else:
+        search_query = st.session_state.document_content
+    
+    # 디버깅 정보 표시
+    _show_debug_info(search_mode, search_query)
+    
+    if search_query and search_query.strip():
+        st.success("✅ 분석을 시작합니다...")
+        analysis_service = AIAnalysisService()
+        analysis_service.run_enhanced_analysis_process(search_query.strip())
         st.session_state.analysis_state = 'completed'
+    else:
+        st.error("❌ 분석할 내용이 없습니다. 문서에 내용을 입력하거나 텍스트를 선택해주세요.")
+        _render_test_analysis_button()
+        st.session_state.analysis_state = 'idle'
 
 def _show_debug_info(search_mode, search_query):
     """디버깅 정보 표시"""
@@ -128,9 +138,21 @@ def _render_main_analysis_tab():
         st.markdown(result.get('content', '분석 결과가 없습니다.'))
         
         # 결과 삽입 버튼
-        if st.button("📝 문서에 삽입", key="insert_main_analysis"):
-            _insert_content_to_document(result.get('content', ''))
-            st.success("✅ 분석 결과가 문서에 삽입되었습니다!")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📝 요약 삽입", key="insert_main_summary"):
+                content_to_insert = result.get('content', '')
+                if content_to_insert:
+                    _insert_content_to_document(content_to_insert, "AI분석 요약", 600)
+                else:
+                    st.warning("⚠️ 삽입할 분석 결과가 없습니다.")
+        with col2:
+            if st.button("📋 전체 삽입", key="insert_main_full"):
+                content_to_insert = result.get('content', '')
+                if content_to_insert:
+                    _insert_content_to_document(content_to_insert, "AI분석 전체", 1500)
+                else:
+                    st.warning("⚠️ 삽입할 분석 결과가 없습니다.")
     else:
         st.info("분석 결과가 없습니다. AI 분석을 실행해주세요.")
 
@@ -142,23 +164,72 @@ def _render_recommendations_tab():
     internal_docs = st.session_state.get('internal_search_results', [])
     if internal_docs:
         st.markdown("#### 📁 사내 문서")
-        for doc in internal_docs[:3]:
-            with st.expander(f"📄 {doc.get('title', '제목 없음')}"):
-                st.markdown(f"**요약:** {doc.get('summary', 'N/A')}")
-                st.markdown(f"**출처:** {doc.get('source_detail', 'N/A')}")
-                if st.button(f"📝 삽입", key=f"insert_internal_{doc.get('id')}"):
-                    _insert_content_to_document(doc.get('content', ''))
+        for i, doc in enumerate(internal_docs[:3]):
+            with st.expander(f"📄 {doc.get('title', '제목 없음')} (관련도: {doc.get('relevance_score', 0):.1f}/1.0)"):
+                st.markdown(f"**📋 요약:** {doc.get('summary', 'N/A')}")
+                
+                # 출처 정보 토글
+                if st.toggle(f"🔍 출처 상세보기", key=f"toggle_internal_{i}"):
+                    st.markdown("**📍 출처 정보:**")
+                    st.markdown(f"- **검색 유형:** {doc.get('search_type', 'N/A')}")
+                    st.markdown(f"- **출처:** {doc.get('source_detail', 'N/A')}")
+                    st.markdown(f"- **문서 ID:** {doc.get('id', 'N/A')}")
+                    if doc.get('url'):
+                        st.markdown(f"- **URL:** [{doc.get('url')}]({doc.get('url')})")
+                
+                # 내용 미리보기 토글
+                if st.toggle(f"📖 내용 미리보기", key=f"preview_internal_{i}"):
+                    content_preview = doc.get('content', '')[:500] + ('...' if len(doc.get('content', '')) > 500 else '')
+                    st.markdown(f"```\n{content_preview}\n```")
+                
+                # 삽입 버튼
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button(f"📝 요약 삽입", key=f"insert_internal_summary_{i}"):
+                        _insert_content_to_document(doc.get('summary', ''), "사내문서 요약", 500)
+                with col2:
+                    if st.button(f"� 일부 삽입", key=f"insert_internal_partial_{i}"):
+                        _insert_content_to_document(doc.get('content', ''), "사내문서 발췌", 800)
+                with col3:
+                    if st.button(f"📋 전체 삽입", key=f"insert_internal_full_{i}"):
+                        _insert_content_to_document(doc.get('content', ''), "사내문서 전체", 2000)
+    else:
+        st.info("📭 사내 문서 검색 결과가 없습니다.")
     
     # 외부 문서 결과 표시
     external_docs = st.session_state.get('external_search_results', [])
     if external_docs:
         st.markdown("#### 🌐 외부 레퍼런스")
-        for doc in external_docs[:3]:
-            with st.expander(f"📄 {doc.get('title', '제목 없음')}"):
-                st.markdown(f"**요약:** {doc.get('summary', 'N/A')}")
-                st.markdown(f"**출처:** {doc.get('url', 'N/A')}")
-                if st.button(f"📝 삽입", key=f"insert_external_{doc.get('id')}"):
-                    _insert_content_to_document(doc.get('content', ''))
+        for i, doc in enumerate(external_docs[:3]):
+            with st.expander(f"📄 {doc.get('title', '제목 없음')} (관련도: {doc.get('relevance_score', 0):.1f}/1.0)"):
+                st.markdown(f"**📋 요약:** {doc.get('summary', 'N/A')}")
+                
+                # 출처 정보 토글
+                if st.toggle(f"🔍 출처 상세보기", key=f"toggle_external_{i}"):
+                    st.markdown("**📍 출처 정보:**")
+                    st.markdown(f"- **검색 유형:** {doc.get('search_type', 'N/A')}")
+                    st.markdown(f"- **출처 상세:** {doc.get('source_detail', 'N/A')}")
+                    if doc.get('url'):
+                        st.markdown(f"- **원문 링크:** [{doc.get('url')}]({doc.get('url')})")
+                
+                # 내용 미리보기 토글
+                if st.toggle(f"📖 내용 미리보기", key=f"preview_external_{i}"):
+                    content_preview = doc.get('content', '')[:500] + ('...' if len(doc.get('content', '')) > 500 else '')
+                    st.markdown(f"```\n{content_preview}\n```")
+                
+                # 삽입 버튼
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if st.button(f"📝 요약 삽입", key=f"insert_external_summary_{i}"):
+                        _insert_content_to_document(doc.get('summary', ''), "외부자료 요약", 500)
+                with col2:
+                    if st.button(f"� 일부 삽입", key=f"insert_external_partial_{i}"):
+                        _insert_content_to_document(doc.get('content', ''), "외부자료 발췌", 800)
+                with col3:
+                    if st.button(f"📋 전체 삽입", key=f"insert_external_full_{i}"):
+                        _insert_content_to_document(doc.get('content', ''), "외부자료 전체", 2000)
+    else:
+        st.info("📭 외부 레퍼런스 검색 결과가 없습니다.")
 
 def _render_text_refinement_tab():
     """문장 다듬기 탭 렌더링"""
@@ -183,7 +254,8 @@ def _render_text_refinement_tab():
                 st.markdown(f"```\n{refined_text}\n```")
                 
                 if st.button(f"적용", key=f"apply_{style_key}"):
-                    _insert_content_to_document(refined_text)
+                    if refined_text:
+                        _insert_content_to_document(refined_text, f"문장다듬기({style_name})", 800)
     else:
         st.info("텍스트를 선택하면 문장 다듬기 기능을 사용할 수 있습니다.")
 
@@ -210,12 +282,45 @@ def _render_structuring_tab():
                 st.markdown(structured_content)
                 
                 if st.button(f"구조 적용", key=f"apply_struct_{struct_key}"):
-                    _insert_content_to_document(structured_content)
+                    if structured_content:
+                        _insert_content_to_document(structured_content, f"구조화({struct_name})", 1000)
     else:
         st.info("텍스트를 선택하면 구조화 기능을 사용할 수 있습니다.")
 
-def _insert_content_to_document(content):
-    """문서에 내용 삽입"""
-    current_content = st.session_state.document_content
-    new_content = current_content + f"\n\n{content}"
+def _insert_content_to_document(content, content_type="일반", max_length=1000):
+    """문서에 내용 삽입 (길이 제한 포함)"""
+    if not content or not content.strip():
+        st.warning("⚠️ 삽입할 내용이 없습니다.")
+        return
+    
+    # 내용 길이 확인 및 제한
+    content = content.strip()
+    original_length = len(content)
+    
+    if len(content) > max_length:
+        content = content[:max_length] + f"\n\n[원본 길이: {original_length:,}자 / 표시: {max_length:,}자로 제한됨]"
+        truncated = True
+    else:
+        truncated = False
+    
+    # 현재 문서 내용 가져오기
+    current_content = st.session_state.get('document_content', '')
+    
+    # 구분선과 메타데이터 추가
+    separator = "\n\n---\n\n" if current_content.strip() else ""
+    timestamp = __import__('datetime').datetime.now().strftime("%H:%M")
+    header = f"[{content_type} | {timestamp}]"
+    
+    new_content = current_content + separator + header + "\n\n" + content
+    
+    # 세션 상태 업데이트
     st.session_state.document_content = new_content
+    
+    # 성공 메시지를 즉시 표시 (잘린 경우 알림 포함)
+    if truncated:
+        st.success(f"✅ {content_type}이 삽입되었습니다! (길이 제한: {max_length:,}자)")
+    else:
+        st.success(f"✅ {content_type}이 문서에 삽입되었습니다!")
+    
+    # 세션 상태에도 저장해서 다음 렌더링에서도 보이도록
+    st.session_state.insert_success_message = f"✅ {content_type} 삽입 완료"

@@ -41,8 +41,8 @@ echo "🔒 CSP Policy configured for OnlyOffice integration"
 
 echo "🌐 Starting Streamlit on port $STREAMLIT_SERVER_PORT..."
 
-# Streamlit 앱 시작
-streamlit run app.py \
+# Streamlit 앱 시작 (리팩토링된 버전)
+streamlit run app_refactored.py \
     --server.port=$STREAMLIT_SERVER_PORT \
     --server.address=$STREAMLIT_SERVER_ADDRESS \
     --server.headless=$STREAMLIT_SERVER_HEADLESS \

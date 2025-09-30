@@ -98,15 +98,27 @@ def _render_analysis_section():
     
     with col1:
         st.markdown("#### 🎯 AI 분석할 텍스트 선택")
+        
+        # 빠른 텍스트 입력
         selected_text = st.text_input(
             "분석하고 싶은 텍스트를 입력하세요:",
+            value=st.session_state.get('selected_text', ''),
             placeholder="문서에서 분석할 부분을 여기에 입력하세요...",
             help="입력한 텍스트를 AI가 분석하여 맞춤형 결과를 제공합니다.",
             key="analysis_text_input"
         )
         
-        if selected_text != st.session_state.selected_text:
+        # 텍스트가 변경되면 세션 상태 업데이트
+        if selected_text != st.session_state.get('selected_text', ''):
             session_state.set_analysis_text(selected_text)
+        
+        # 고급 텍스트 선택 버튼
+        if st.button("🔧 고급 텍스트 선택", help="더 다양한 방법으로 텍스트를 선택할 수 있습니다"):
+            # AI 패널을 열고 선택된 텍스트 기반 모드로 설정
+            if not st.session_state.ai_panel_open:
+                session_state.toggle_ai_panel()
+            st.session_state.search_mode = "선택된 텍스트 기반"
+            st.rerun()
     
     with col2:
         st.markdown("#### 🚀 AI 분석 시작")
