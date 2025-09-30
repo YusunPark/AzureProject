@@ -9,36 +9,10 @@ from core.utils import show_message
 
 def render_ai_sidebar():
     """AI sidebar panel with enhanced analysis process"""
-    # 디버깅: AI 패널 상태 확인
-    ai_panel_open = st.session_state.get('ai_panel_open', False)
-    
-    # 항상 기본 패널 표시 (디버깅용)
-    with st.container():
-        st.markdown("### 🤖 AI 분석 패널")
-        
-        if not ai_panel_open:
-            # 패널이 닫혀있을 때 안내 메시지
-            st.info("AI 분석 기능을 사용하려면 왼쪽의 '전체분석하기' 또는 '선택분석하기' 버튼을 클릭하세요.")
-            
-            # 디버깅 정보
-            with st.expander("🔍 AI 패널 상태 디버깅"):
-                st.write(f"ai_panel_open: {ai_panel_open}")
-                st.write("주요 세션 상태:")
-                debug_keys = ['ai_panel_open', 'analysis_mode', 'analysis_text', 'analysis_in_progress']
-                for key in debug_keys:
-                    st.write(f"- {key}: {st.session_state.get(key, 'None')}")
-            return
-        else:
-            # AI 패널이 열려있을 때 실제 분석 UI 표시
-            pass
+    if not st.session_state.get('ai_panel_open', False):
+        return
 
-    # st.sidebar 대신 일반 컨테이너 사용 (col2에서 렌더링되므로)
-    with st.container():
-        # AI 패널 스타일 적용
-        st.markdown("""
-        <div style="background-color: #f0f2f6; padding: 1rem; border-radius: 0.5rem; border: 1px solid #e0e0e0;">
-        """, unsafe_allow_html=True)
-        
+    with st.sidebar:
         # 헤더
         st.markdown("## 🤖 AI 분석")
         
@@ -70,9 +44,6 @@ def render_ai_sidebar():
         
         # 분석 결과 표시
         _render_analysis_results()
-        
-        # 스타일 div 닫기
-        st.markdown("</div>", unsafe_allow_html=True)
 
 def _run_ai_analysis():
     """AI 분석 실행"""

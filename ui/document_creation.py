@@ -34,8 +34,12 @@ def render_document_creation():
     # AI 분석 버튼들 (메인 기능) - 상단으로 이동
     st.markdown("### 🤖 AI 분석 기능")
     
+    # AI 분석 상태 확인
+    ai_panel_open = st.session_state.get('ai_panel_open', False)
+    analysis_in_progress = st.session_state.get('analysis_in_progress', False)
+    
     # AI 패널이 열려있지 않을 때만 분석 버튼들 표시
-    if not st.session_state.get('ai_panel_open', False):
+    if not ai_panel_open:
         col1, col2 = st.columns(2)
         
         with col1:
@@ -86,30 +90,37 @@ def render_document_creation():
     # 문서 내용 입력 영역
     st.markdown("### ✍️ 문서 내용")
     
+    # AI 분석 중일 때 안내 메시지 표시
+    if analysis_in_progress:
+        st.info("🤖 AI 분석이 진행 중입니다. 분석이 완료되면 결과를 문서에 삽입할 수 있습니다.")
+        st.markdown("---")
+    
     # 세션 상태에서 현재 문서 내용 가져오기 - 강제 동기화
     if 'document_content' not in st.session_state:
         st.session_state.document_content = ''
     
-    # 삽입이 완료된 경우 강제로 widget key를 업데이트
-    widget_key = "document_content_main_editor"
-    if st.session_state.get('force_textarea_update'):
-        widget_key = f"document_content_main_editor_{st.session_state.get('last_insert_timestamp', '')}"
-        del st.session_state.force_textarea_update
+    # 동적 키 생성으로 위젯 강제 업데이트 (rerun 없이)
+    insert_timestamp = st.session_state.get('last_insert_timestamp', 'initial')
+    widget_key = f"document_content_main_{insert_timestamp}"
     
-    current_content = st.session_state.document_content
+    print(f"[DEBUG] Widget Key: {widget_key}")
     
+    # 세션 상태의 내용을 value로 사용 (핵심!)
+    current_session_content = st.session_state.document_content
+    
+    # textarea 위젯 생성
     document_content = st.text_area(
         "문서 내용을 입력하세요:",
-        value=current_content,
+        value=current_session_content,  # 항상 세션 상태 값 사용
         placeholder="여기에 문서 내용을 작성하세요...",
         height=350,
         key=widget_key
     )
     
-    # 문서 내용이 변경되면 세션에 저장
-    if document_content != current_content:
+    # 사용자가 직접 입력한 경우에만 세션 상태 업데이트
+    if document_content != current_session_content:
         st.session_state.document_content = document_content
-        print(f"[DEBUG] 문서 내용 업데이트: {len(document_content):,}자")
+        print(f"[DEBUG] 사용자 입력 업데이트: {len(document_content):,}자")
     
     # 디버깅 정보 - 동기화 상태 확인
     with st.expander("🔧 텍스트 영역 디버깅", expanded=False):
