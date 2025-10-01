@@ -2,6 +2,8 @@
 
 https://appsvc-yusun-01.azurewebsites.net/
 
+예시 질문 : 실손의료보험의 보장범위와 면책·자기부담 항목
+
 
 AI 기반의 스마트한 문서 작성, 학습, 관리 플랫폼입니다.
 
