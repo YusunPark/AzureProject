@@ -1,4 +1,7 @@
-# AI 문서 작성 어시스턴트 - 리팩토링 완료 버전
+# AI 문서 작성 어시스턴트
+
+https://appsvc-yusun-01.azurewebsites.net/
+
 
 AI 기반의 스마트한 문서 작성, 학습, 관리 플랫폼입니다.
 
