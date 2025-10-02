@@ -33,24 +33,47 @@ AI 기반의 스마트한 문서 작성, 학습, 관리 플랫폼입니다.
 - **홈 대시보드**: 전체 현황 한눈에 보기
 - **서비스 상태 모니터링**: Azure 서비스 연결 상태 실시간 확인
 - **사용자 친화적 UI**: 직관적인 네비게이션 및 작업 흐름
-- 
-<img width="1280" height="446" alt="스크린샷 2025-10-01 18 00 28" src="https://github.com/user-attachments/assets/505f666a-56a7-42be-93a3-700a2af46388" />
-<img width="1302" height="547" alt="스크린샷 2025-10-01 18 00 20" src="https://github.com/user-attachments/assets/d4b95ed2-a477-471e-8a92-09e66cd376d5" />
-<img width="1301" height="546" alt="스크린샷 2025-10-01 18 00 12" src="https://github.com/user-attachments/assets/08f7f014-ff07-4e4e-997b-3ccba57a3a99" />
-<img width="1309" height="894" alt="스크린샷 2025-10-01 18 00 04" src="https://github.com/user-attachments/assets/d8dc7113-1db7-483a-bdee-20ff74cbc25b" />
-<img width="1688" height="560" alt="스크린샷 2025-10-01 17 59 58" src="https://github.com/user-attachments/assets/02a549be-97a7-4234-be84-27da23b102ca" />
-<img width="1658" height="905" alt="스크린샷 2025-10-01 17 59 45" src="https://github.com/user-attachments/assets/e135717f-d433-4406-923d-e1527e287d29" />
-<img width="352" height="891" alt="스크린샷 2025-10-01 17 59 26" src="https://github.com/user-attachments/assets/2fb644d8-46e4-4ba7-98aa-4307eef3c394" />
-<img width="336" height="892" alt="스크린샷 2025-10-01 17 59 18" src="https://github.com/user-attachments/assets/8bbd300a-ac61-4723-8a51-157cb5db3a0b" />
-<img width="343" height="530" alt="스크린샷 2025-10-01 17 59 11" src="https://github.com/user-attachments/assets/6269edb7-cfc3-412b-9352-d04d05425452" />
-<img width="345" height="475" alt="스크린샷 2025-10-01 17 59 05" src="https://github.com/user-attachments/assets/20b06047-910d-49ab-b17f-43adb38b80e7" />
-<img width="1649" height="914" alt="스크린샷 2025-10-01 17 58 57" src="https://github.com/user-attachments/assets/807e3bf3-0212-44c0-a163-e4e5fef9ff85" />
-<img width="1689" height="931" alt="스크린샷 2025-10-01 17 58 48" src="https://github.com/user-attachments/assets/5144d580-2f79-4b07-94eb-d0c2dcbd37c3" />
-<img width="1704" height="949" alt="스크린샷 2025-10-01 17 58 23" src="https://github.com/user-attachments/assets/45b78b13-b439-4f71-a13b-43dd35f35f34" />
-<img width="1689" height="931" alt="스크린샷 2025-10-01 17 58 17" src="https://github.com/user-attachments/assets/a3ad4c76-4b6d-4843-95e4-54f463491da5" />
+
+
+
 <img width="1671" height="944" alt="스크린샷 2025-10-01 17 58 05" src="https://github.com/user-attachments/assets/afb55e59-b098-489c-874b-e74aeadf44b3" />
 
+<img width="1689" height="931" alt="스크린샷 2025-10-01 17 58 17" src="https://github.com/user-attachments/assets/a3ad4c76-4b6d-4843-95e4-54f463491da5" />
 
+<img width="1704" height="949" alt="스크린샷 2025-10-01 17 58 23" src="https://github.com/user-attachments/assets/45b78b13-b439-4f71-a13b-43dd35f35f34" />
+
+<img width="1689" height="931" alt="스크린샷 2025-10-01 17 58 48" src="https://github.com/user-attachments/assets/5144d580-2f79-4b07-94eb-d0c2dcbd37c3" />
+
+
+<img width="1649" height="914" alt="스크린샷 2025-10-01 17 58 57" src="https://github.com/user-attachments/assets/807e3bf3-0212-44c0-a163-e4e5fef9ff85" />
+
+<img width="345" height="475" alt="스크린샷 2025-10-01 17 59 05" src="https://github.com/user-attachments/assets/20b06047-910d-49ab-b17f-43adb38b80e7" />
+
+
+<img width="343" height="530" alt="스크린샷 2025-10-01 17 59 11" src="https://github.com/user-attachments/assets/6269edb7-cfc3-412b-9352-d04d05425452" />
+
+<img width="336" height="892" alt="스크린샷 2025-10-01 17 59 18" src="https://github.com/user-attachments/assets/8bbd300a-ac61-4723-8a51-157cb5db3a0b" />
+
+
+<img width="352" height="891" alt="스크린샷 2025-10-01 17 59 26" src="https://github.com/user-attachments/assets/2fb644d8-46e4-4ba7-98aa-4307eef3c394" />
+
+
+<img width="1658" height="905" alt="스크린샷 2025-10-01 17 59 45" src="https://github.com/user-attachments/assets/e135717f-d433-4406-923d-e1527e287d29" />
+
+
+<img width="1688" height="560" alt="스크린샷 2025-10-01 17 59 58" src="https://github.com/user-attachments/assets/02a549be-97a7-4234-be84-27da23b102ca" />
+
+
+<img width="1309" height="894" alt="스크린샷 2025-10-01 18 00 04" src="https://github.com/user-attachments/assets/d8dc7113-1db7-483a-bdee-20ff74cbc25b" />
+
+
+<img width="1301" height="546" alt="스크린샷 2025-10-01 18 00 12" src="https://github.com/user-attachments/assets/08f7f014-ff07-4e4e-997b-3ccba57a3a99" />
+
+<img width="1302" height="547" alt="스크린샷 2025-10-01 18 00 20" src="https://github.com/user-attachments/assets/d4b95ed2-a477-471e-8a92-09e66cd376d5" />
+
+
+
+<img width="1280" height="446" alt="스크린샷 2025-10-01 18 00 28" src="https://github.com/user-attachments/assets/505f666a-56a7-42be-93a3-700a2af46388" />
 
 ## 📊 시스템 아키텍처
 
